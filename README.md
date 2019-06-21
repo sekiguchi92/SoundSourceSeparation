@@ -7,5 +7,5 @@ Tools for multi-channel speech enhancement (and source separation)
 * librosa
 * soundfile
 * progressbar2
-* chainer (5.3.0 is tested) (for MNMF-DP, FastMNMF-DP, ILRMA-DP)
-* cupy (5.3.0 is tested) (for GPU accelaration)
+* chainer (5.3.0 was tested) (for MNMF-DP, FastMNMF-DP, ILRMA-DP)
+* cupy (5.3.0 was tested) (for GPU accelaration)
