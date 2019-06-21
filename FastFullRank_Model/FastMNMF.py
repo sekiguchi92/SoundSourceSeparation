@@ -14,11 +14,9 @@ import pickle as pic
 
 sys.path.append("/home/sekiguch/Dropbox/program/python/my_python_library")
 sys.path.append("../my_python_library")
-import separation
-from configure import *
+from configure_FastModel import *
 from FastFCA import FastFCA
 
-from calculate_SDR_PESQ_MOS_STOI import calculate_SDR
 
 class FastMNMF(FastFCA):
 
@@ -43,13 +41,6 @@ class FastMNMF(FastFCA):
 
     def load_spectrogram(self, X_FTM):
         super(FastMNMF, self).load_spectrogram(X_FTM)
-        # self.NUM_freq, self.NUM_time, self.NUM_mic = X_FTM.shape
-        # self.X_FTM = self.xp.asarray(X_FTM, dtype=self.xp.complex)
-        # self.XX_FTMM = self.X_FTM[:, :, :, None] @ self.xp.conj(self.X_FTM[:, :, None, :]) # F T M M
-        # self.covarianceDiag_NFM = self.xp.ones([self.NUM_source, self.NUM_freq, self.NUM_mic], dtype=self.xp.float) / self.NUM_mic
-        # self.diagonalizer_FMM = self.xp.zeros([self.NUM_freq, self.NUM_mic, self.NUM_mic], dtype=self.xp.complex)
-        # self.diagonalizer_FMM[:] = self.xp.eye(self.NUM_mic).astype(self.xp.complex)
-
         self.W_NFK = self.xp.abs(self.xp.random.rand(self.NUM_source, self.NUM_freq, self.NUM_basis).astype(self.xp.float))
         self.H_NKT = self.xp.abs(self.xp.random.rand(self.NUM_source, self.NUM_basis, self.NUM_time).astype(self.xp.float))
         self.lambda_NFT = self.W_NFK @ self.H_NKT
@@ -74,9 +65,6 @@ class FastMNMF(FastFCA):
     def initialize_PSD(self):
         power_observation_FT = (self.xp.abs(self.X_FTM).astype(self.xp.float32) ** 2).mean(axis=2)
         shape = 2
-        # self.W_NFK[:] = self.xp.random.gamma(shape, 1 / self.NUM_freq / shape, size=[self.NUM_source, self.NUM_freq, self.NUM_basis])
-        # self.W_NFK[self.W_NFK < EPS] = EPS
-        # self.W_NFK = self.W_NFK / self.W_NFK.sum(axis=1)[:, None]
         self.W_NFK = self.xp.random.dirichlet(np.ones(self.NUM_freq)*shape, size=[self.NUM_source, self.NUM_basis]).transpose(0, 2, 1)
 
         self.H_NKT = self.xp.random.gamma(shape, (power_observation_FT.mean() * self.NUM_freq * self.NUM_mic / (self.NUM_source * self.NUM_basis)) / shape, size=[self.NUM_source, self.NUM_basis, self.NUM_time])
@@ -86,15 +74,15 @@ class FastMNMF(FastFCA):
         self.reset_variable()
 
 
-    def make_filename_suffix(self):
-        self.filename_suffix = "S={}-it={}-L={}-init={}".format(self.NUM_source, self.NUM_iteration, self.NUM_basis, self.MODE_initialize_covarianceMatrix)
+    def make_fileName_suffix(self):
+        self.fileName_suffix = "S={}-it={}-L={}-init={}".format(self.NUM_source, self.NUM_iteration, self.NUM_basis, self.MODE_initialize_covarianceMatrix)
 
         if hasattr(self, "file_id"):
-            self.filename_suffix += "-ID={}".format(self.file_id)
+            self.fileName_suffix += "-ID={}".format(self.file_id)
         else:
             print("====================\n\nWarning: Please set self.file_id\n\n====================")
 
-        print("filename_suffix:", self.filename_suffix)
+        print("fileName_suffix:", self.fileName_suffix)
 
 
     def update(self):
@@ -159,16 +147,16 @@ class FastMNMF(FastFCA):
         self.reset_variable()
 
 
-    def save_parameter(self, filename):
+    def save_parameter(self, fileName):
         param_list = [self.lambda_NFT, self.covarianceDiag_NFM, self.diagonalizer_FMM, self.W_NFK, self.H_NKT]
         if self.xp != np:
             param_list = [chainer.cuda.to_cpu(param) for param in param_list]
 
-        pic.dump(param_list, open(filename, "wb"))
+        pic.dump(param_list, open(fileName, "wb"))
 
 
-    def load_parameter(self, filename):
-        param_list = pic.load(open(filename, "rb"))
+    def load_parameter(self, fileName):
+        param_list = pic.load(open(fileName, "rb"))
         if self.xp != np:
             param_list = [chainer.cuda.to_gpu(param) for param in param_list]
 
@@ -180,16 +168,15 @@ if __name__ == "__main__":
     import argparse
     import pickle as pic
     import sys, os
-    sys.path.append("/home/sekiguch/Dropbox/program/python/chainer/")
-    sys.path.append("../chainer/")
-    import separation
 
     parser = argparse.ArgumentParser()
-    parser.add_argument(             '--gpu', type=  int, default=    0, help='GPU ID')##
-    parser.add_argument(           '--n_fft', type=  int, default= 1024, help='number of frequencies')
-    parser.add_argument(       '--NUM_noise', type=  int, default=    1, help='number of noise')
-    parser.add_argument(   '--NUM_iteration', type=  int, default=  100, help='number of iteration')
-    parser.add_argument(       '--NUM_basis', type=  int, default=    8, help='number of basis')
+    parser.add_argument(    'input_fileName', type= str, help='filename of the multichannel observed signals')
+    parser.add_argument(         '--file_id', type= str, default="None", help='file id')
+    parser.add_argument(             '--gpu', type= int, default=    0, help='GPU ID')##
+    parser.add_argument(           '--n_fft', type= int, default= 1024, help='number of frequencies')
+    parser.add_argument(       '--NUM_noise', type= int, default=    1, help='number of noise')
+    parser.add_argument(   '--NUM_iteration', type= int, default=  100, help='number of iteration')
+    parser.add_argument(       '--NUM_basis', type= int, default=    8, help='number of basis')
     parser.add_argument( '--MODE_initialize_covarianceMatrix', type=  str, default="obs", help='cGMM, cGMM2, unit, obs')
     args = parser.parse_args()
 
@@ -200,11 +187,7 @@ if __name__ == "__main__":
         print("Use GPU " + str(args.gpu))
         cuda.get_device_from_id(args.gpu).use()
 
-    file_id = ["F04_050C0115_CAF", "M05_441C0213_BUS"][1]
-    wav, fs = sf.read("../../data/chime/{}.CH13456.wav".format(file_id))
-    # wav, fs = sf.read("../../data/chime/F04_050C0115_CAF.CH13456.wav")
-    # wav, fs = sf.read("../rank1_model/test.wav")
-    # wav, fs = sf.read("/home/sekiguchi/pyroomacoustics/input.wav")
+    wav, fs = sf.read(args.input_fileName)
     wav = wav.T
     M = len(wav)
     for m in range(M):
@@ -215,14 +198,5 @@ if __name__ == "__main__":
 
     separater = FastMNMF(NUM_source=args.NUM_noise+1, NUM_basis=args.NUM_basis, xp=xp, MODE_initialize_covarianceMatrix=args.MODE_initialize_covarianceMatrix)
     separater.load_spectrogram(spec)
-    separater.file_id = file_id
-    # clean_filename = "/n/sd2/sekiguchi/CHiME3/mydata/dt05_simu_clean/F04_050C0115_CAF.CH5.wav"
-    clean_filename = "../../data/chime/clean_{}.CH5.wav".format(file_id)
-    separater.wav_org = sf.read(clean_filename)[0]
-
-    processingTime = separater.solve(NUM_iteration=args.NUM_iteration, save_likelihood=False, save_parameter=False, save_wav=False, save_dir="./", interval_save_parameter=50)
-    separater.separate_FastWienerFilter()
-    print("SDR = ", separater.calculate_separation_performance(), "  processing_time:", processingTime/args.NUM_iteration)
-    # separater.separate_WienerFilter()
-    # separater.calculate_SDR()
-    # print("processingTime : ", processingTime / args.NUM_iteration)
+    separater.file_id = args.file_id
+    separater.solve(NUM_iteration=args.NUM_iteration, save_likelihood=False, save_parameter=False, save_wav=False, save_path="./", interval_save_parameter=50)

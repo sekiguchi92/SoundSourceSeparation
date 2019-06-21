@@ -1,0 +1,2 @@
+EPS = 1e-10
+MIC_INDEX = 3

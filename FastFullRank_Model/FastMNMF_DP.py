@@ -5,16 +5,15 @@ import sys, os
 import numpy as np
 import chainer
 from chainer import functions as chf
-import time
 import pickle as pic
 
-from configure import *
+from configure_FastModel import *
 from FastFCA import FastFCA
 
-class FastMSDSP(FastFCA):
+class FastMNMF_DP(FastFCA):
 
-    def __init__(self, speech_VAE=None, NUM_noise=1, NUM_Z_iteration=30, DIM_latent=16, NUM_basis_noise=2, xp=np, MODE_initialize_covarianceMatrix="unit", MODE_update_Z="sampling", normalize_input=True):
-        """ initialize FastMSDSP
+    def __init__(self, speech_VAE=None, NUM_noise=1, NUM_Z_iteration=30, DIM_latent=16, NUM_basis_noise=2, xp=np, MODE_initialize_covarianceMatrix="unit", MODE_update_Z="sampling", normalize_encoder_input=True):
+        """ initialize FastMNMF_DP
 
         Parameters:
         -----------
@@ -31,31 +30,24 @@ class FastMSDSP(FastFCA):
             MODE_update_Z: str
                 how to update latent variable Z {sampling, backprop}
         """
-        super(FastMSDSP, self).__init__(NUM_source=NUM_noise+1, xp=xp, MODE_initialize_covarianceMatrix=MODE_initialize_covarianceMatrix)
+        super(FastMNMF_DP, self).__init__(NUM_source=NUM_noise+1, xp=xp, MODE_initialize_covarianceMatrix=MODE_initialize_covarianceMatrix)
         self.NUM_source, self.NUM_speech, self.NUM_noise = NUM_noise+1, 1, NUM_noise
         self.speech_VAE = speech_VAE
         self.NUM_Z_iteration = NUM_Z_iteration
         self.NUM_basis_noise = NUM_basis_noise
         self.DIM_latent = DIM_latent
         self.MODE_update_Z = MODE_update_Z
-        self.normalize_input = normalize_input
-        self.method_name = "FastMSDSP"
-        self.time_for_Z = 0.0
-        self.time_for_WH = 0.0
-        self.time_for_UV = 0.0
-        self.time_for_QG = 0.0
+        self.normalize_encoder_input = normalize_encoder_input
+        self.method_name = "FastMNMF_DP"
 
 
     def load_spectrogram(self, X_FTM):
-        super(FastMSDSP, self).load_spectrogram(X_FTM)
-        # self.NUM_freq, self.NUM_time, self.NUM_mic = X_FTM.shape
-        # self.X_FTM = self.xp.asarray(X_FTM, dtype=self.xp.complex)
-        # self.XX_FTMM = self.xp.matmul( self.X_FTM[:, :, :, None], self.xp.conj( self.X_FTM[:, :, None, :] ) ) # F T M M
-        # self.lambda_NFT = self.xp.random.random([self.NUM_source, self.NUM_freq, self.NUM_time]).astype(self.xp.float)
-        # self.covarianceDiag_NFM = self.xp.ones([self.NUM_source, self.NUM_freq, self.NUM_mic], dtype=self.xp.float) / self.NUM_mic
-        # self.diagonalizer_FMM = self.xp.zeros([self.NUM_freq, self.NUM_mic, self.NUM_mic], dtype=self.xp.complex)
-        # self.diagonalizer_FMM[:] = self.xp.eye(self.NUM_mic).astype(self.xp.complex)
-
+        """ load complex spectrogram
+        Parameters:
+        -----------
+        X_FTM: xp.array [F x T x M]
+        """
+        super(FastMNMF_DP, self).load_spectrogram(X_FTM)
         self.xp = self.speech_VAE.xp
         self.u_F = self.xp.random.rand(self.NUM_freq).astype(self.xp.float)
         self.v_T = (self.xp.random.rand(self.NUM_time).astype(self.xp.float) * 0.9) + 0.1
@@ -78,12 +70,16 @@ class FastMSDSP(FastFCA):
         -----------
             NUM_noise: int
                 the number of sources
+            NUM_iteration: int
+                the number of iteration
+            NUM_Z_iteration: int
+                the number of iteration of updating Z in each iteration
+            NUM_basis_noise: int
+                the number of basis of noise sources
             MODE_initialize_covarianceMatrix: str
                 how to initialize covariance matrix {unit, obs, cGMM}
-            MODE_update_variable: str
-                'all' : update all the variables simultanesouly
-                'Z' : update variables other than Z and then update Z
-                'one_by_one' : update one by one
+            MODE_update_Z: str
+                how to update latent variable Z {sampling, backprop}
         """
         if NUM_noise != None:
             self.NUM_noise = NUM_noise
@@ -101,6 +97,10 @@ class FastMSDSP(FastFCA):
 
 
     def initialize_PSD(self):
+        """ 
+        initialize parameters related to power spectral density (PSD)
+        W, H, U, V, Z
+        """
         power_observation_FT = (self.xp.abs(self.X_FTM) ** 2).mean(axis=2)
         shape = 2
         self.W_noise_NnFK = self.xp.random.dirichlet(np.ones(self.NUM_freq)*shape, size=[self.NUM_noise, self.NUM_basis_noise]).transpose(0, 2, 1)
@@ -111,7 +111,7 @@ class FastMSDSP(FastFCA):
         self.u_F[:] = 1 / self.NUM_freq
         self.v_T[:] = 1
 
-        if self.normalize_input:
+        if self.normalize_encoder_input:
             power_observation_FT = power_observation_FT / power_observation_FT.sum(axis=0).mean()
 
         self.Z_speech_DT = self.speech_VAE.encode_cupy(power_observation_FT.astype(self.xp.float32))
@@ -124,46 +124,27 @@ class FastMSDSP(FastFCA):
         self.reset_variable()
 
 
-    def make_filename_suffix(self):
-        self.filename_suffix = "N={}-it={}-itZ={}-speech=VAE-Ls=NONE-noise=NMF-Ln={}-D={}-init={}-latent={}".format(self.NUM_noise, self.NUM_iteration, self.NUM_Z_iteration, self.NUM_basis_noise, self.DIM_latent, self.MODE_initialize_covarianceMatrix, self.MODE_update_Z)
+    def make_fileName_suffix(self):
+        self.fileName_suffix = "N={}-it={}-itZ={}-Ln={}-D={}-init={}-latent={}".format(self.NUM_noise, self.NUM_iteration, self.NUM_Z_iteration, self.NUM_basis_noise, self.DIM_latent, self.MODE_initialize_covarianceMatrix, self.MODE_update_Z)
 
         if hasattr(self, "name_DNN"):
-            self.filename_suffix += "-DNN={}".format(self.name_DNN)
+            self.fileName_suffix += "-DNN={}".format(self.name_DNN)
 
         if hasattr(self, "file_id"):
-            self.filename_suffix += "-ID={}".format(self.file_id)
+            self.fileName_suffix += "-ID={}".format(self.file_id)
         else:
             print("====================\n\nWarning: Please set self.file_id\n\n====================")
 
-        print("filename_suffix:", self.filename_suffix)
+        print("parameter:", self.fileName_suffix)
 
-    # @profile
-    # def update(self):
-    #     self.update_UV()
-    #     self.update_Z_speech()
-    #     self.update_WH_noise()
-    #     self.update_CovarianceDiagElement()
-    #     self.udpate_Diagonalizer()
-    #     self.normalize()
 
     def update(self):
-        start = time.time()
         self.update_UV()
-        self.time_for_UV += time.time() - start
-
-        start = time.time()
         self.update_Z_speech()
-        self.time_for_Z += time.time() - start
-
-        start = time.time()
         self.update_WH_noise()
-        self.time_for_WH += time.time() - start
-
-        start = time.time()
         self.update_CovarianceDiagElement()
         self.udpate_Diagonalizer()
         self.normalize()
-        self.time_for_QG += time.time() - start
 
 
     def normalize(self):
@@ -240,13 +221,13 @@ class FastMSDSP(FastFCA):
         self.lambda_NFT[0] = self.u_F[:, None] * self.v_T[None] * self.power_speech_FT
         self.Y_FTM = (self.lambda_NFT[..., None] * self.covarianceDiag_NFM[:, :, None]).sum(axis=0)
 
-    # @profile
-    def loss_func_Z(self, z, vae, n):
+
+    def loss_func_Z(self, z, vae, n): # for update Z by backprop
         power_tmp_FT = chf.exp(vae.decode(z).T) + EPS
         Y_tmp_FTM = power_tmp_FT[:, :, None] * self.UVG_FTM+ self.WHG_noise_FTM
         return chf.sum(chf.log(Y_tmp_FTM) + self.Qx_power_FTM / Y_tmp_FTM ) / (self.NUM_freq * self.NUM_mic)
 
-    # @profile
+
     def update_Z_speech(self, var_propose_distribution=1e-4):
         """
         Parameters:
@@ -305,16 +286,16 @@ class FastMSDSP(FastFCA):
         self.Y_FTM = (self.lambda_NFT[..., None] * self.covarianceDiag_NFM[:, :, None]).sum(axis=0)
 
 
-    def save_parameter(self, filename):
+    def save_parameter(self, fileName):
         param_list = [self.lambda_NFT, self.covarianceDiag_NFM, self.diagonalizer_FMM, self.u_F, self.v_T, self.Z_speech_DT, self.W_noise_NnFK, self.H_noise_NnKT]
         if self.xp != np:
             param_list = [chainer.cuda.to_cpu(param) for param in param_list]
 
-        pic.dump(param_list, open(filename, "wb"))
+        pic.dump(param_list, open(fileName, "wb"))
 
 
-    def load_parameter(self, filename):
-        param_list = pic.load(open(filename, "rb"))
+    def load_parameter(self, fileName):
+        param_list = pic.load(open(fileName, "rb"))
         if self.xp != np:
             param_list = [chainer.cuda.to_gpu(param) for param in param_list]
 
@@ -332,26 +313,21 @@ class Z_link(chainer.link.Link):
 if __name__ == "__main__":
     import soundfile as sf
     import librosa
-    import argparse
-    import pickle as pic
     import sys, os
     from chainer import serializers
-
-    sys.path.append("/home/sekiguch/Dropbox/program/python/chainer/")
-    sys.path.append("../chainer/")
+    import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument(             '--gpu', type=  int, default=     0, help='GPU ID')##
-
-    parser.add_argument(      '--DIM_latent', type=  int, default=   16, help='dimention of encoded vector')
-    parser.add_argument(       '--layer_enc', type=  int, default=    1, help='number of layer of encoder')
-    parser.add_argument(       '--layer_dec', type=  int, default=    1, help='number of layer of decoder')
-    parser.add_argument(       '--NUM_noise', type=  int, default=    1, help='number of noise')
-    parser.add_argument(   '--NUM_iteration', type=  int, default=  100, help='number of iteration')
-    parser.add_argument( '--NUM_Z_iteration', type=  int, default=   30, help='number of update Z iteration')
-    parser.add_argument( '--NUM_basis_noise', type=  int, default=   64, help='number of basis of noise (MODE_noise=NMF)')
-    parser.add_argument(   '--MODE_update_Z', type=  str, default="sampling", help='sampling, sampling2, backprop, backprop2, hybrid, hybrid2')
-    parser.add_argument( '--MODE_initialize_covarianceMatrix', type=  str, default="obs", help='cGMM, cGMM2, unit, obs')
+    parser.add_argument(    'input_fileName', type= str, help='filename of the multichannel observed signals')
+    parser.add_argument(         '--file_id', type= str, default="None", help='file id')
+    parser.add_argument(             '--gpu', type= int, default=     0, help='GPU ID')
+    parser.add_argument(      '--DIM_latent', type= int, default=   16, help='dimention of encoded vector')
+    parser.add_argument(       '--NUM_noise', type= int, default=    1, help='number of noise')
+    parser.add_argument(   '--NUM_iteration', type= int, default=  100, help='number of iteration')
+    parser.add_argument( '--NUM_Z_iteration', type= int, default=   30, help='number of update Z iteration')
+    parser.add_argument( '--NUM_basis_noise', type= int, default=   64, help='number of basis of noise (MODE_noise=NMF)')
+    parser.add_argument(   '--MODE_update_Z', type= str, default="sampling", help='sampling, sampling2, backprop, backprop2, hybrid, hybrid2')
+    parser.add_argument( '--MODE_initialize_covarianceMatrix', type=  str, default="obs", help='unit, obs')
     args = parser.parse_args()
 
     if args.gpu < 0:
@@ -361,20 +337,17 @@ if __name__ == "__main__":
         print("Use GPU " + str(args.gpu))
         chainer.cuda.get_device_from_id(args.gpu).use()
 
-    import network_normal
-    # data_dir = "/n/sd2/sekiguchi/data_for_chainer/network_normal/"
-    data_dir = "./"
-    filename_suffix = "normal-scale={}-speech_only=False-input={}-mode=log_power_IS-D={}-layer_enc={}-dec={}.npz".format("gamma", "power", args.DIM_latent, args.layer_enc, args.layer_dec)
-    speech_VAE = network_normal.VAE(layer_enc=args.layer_enc, layer_dec=args.layer_dec, n_latent=args.DIM_latent)
-    serializers.load_npz(data_dir + "model-best-"+filename_suffix, speech_VAE) # 設定をspeech_vaeにロード
-    name_DNN = "gamma_speech_only=False-enc={}_dec={}_IS".format(args.layer_enc, args.layer_dec)
+    sys.path.append("../DeepSpeechPrior")
+    import network_VAE
+    model_fileName = "../DeepSpeechPrior/model-VAE-best-scale=gamma-D={}.npz".format(args.DIM_latent)
+    speech_VAE = network_VAE.VAE(n_latent=args.DIM_latent)
+    serializers.load_npz(model_fileName, speech_VAE)
+    name_DNN = "VAE"
 
     if xp != np:
         speech_VAE.to_gpu()
 
-    filename = "../../data/chime/F04_050C0115_CAF.CH13456.wav"
-    # filename = "/n/sd2/sekiguchi/CHiME3/data/et05/simu/F05_447C020Q_BUS.CH13456.wav"
-    wav, fs = sf.read(filename)
+    wav, fs = sf.read(args.input_fileName)
     wav = wav.T
     M = len(wav)
     for m in range(M):
@@ -383,18 +356,8 @@ if __name__ == "__main__":
             spec = np.zeros([tmp.shape[0], tmp.shape[1], M], dtype=np.complex)
         spec[:, :, m] = tmp
 
-    separater = FastMSDSP(NUM_noise=args.NUM_noise, speech_VAE=speech_VAE, NUM_Z_iteration=args.NUM_Z_iteration, NUM_basis_noise=args.NUM_basis_noise, xp=xp, MODE_initialize_covarianceMatrix=args.MODE_initialize_covarianceMatrix, MODE_update_Z=args.MODE_update_Z)
+    separater = FastMNMF_DP(NUM_noise=args.NUM_noise, speech_VAE=speech_VAE, NUM_Z_iteration=args.NUM_Z_iteration, NUM_basis_noise=args.NUM_basis_noise, xp=xp, MODE_initialize_covarianceMatrix=args.MODE_initialize_covarianceMatrix, MODE_update_Z=args.MODE_update_Z)
     separater.load_spectrogram(spec)
-
-    separater.file_id = "F04_050C0115_CAF"
+    separater.file_id = args.file_id
     separater.name_DNN = name_DNN
-
-    processingTime = separater.solve(NUM_iteration=args.NUM_iteration, save_likelihood=False, save_parameter=False, save_dir="./", interval_save_parameter=300)
-    print("processingTime : ", processingTime / args.NUM_iteration)
-    # separater.check_processing_time(NUM_Z_iteration=args.NUM_Z_iteration, MODE_update_Z=args.MODE_update_Z, iteration=100)
-
-    clean_filename = "../../data/chime/clean_F04_050C0115_CAF.CH5.wav"
-    separater.wav_org = sf.read(clean_filename)[0]
-    # separater.separate_FastWienerFilter()
-    print("SDR = ", separater.calculate_separation_performance(), "  processing_time:", processingTime/args.NUM_iteration)
-    print("UV:", separater.time_for_UV, "Z:", separater.time_for_Z, "WH:", separater.time_for_WH, "QG:", separater.time_for_QG)
+    separater.solve(NUM_iteration=args.NUM_iteration, save_likelihood=False, save_parameter=False, save_path="./", interval_save_parameter=300)
