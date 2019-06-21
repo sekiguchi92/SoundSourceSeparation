@@ -6,7 +6,6 @@ import sys, os
 from progressbar import progressbar
 import librosa
 import soundfile as sf
-import time
 import pickle as pic
 
 from configure_FastModel import *

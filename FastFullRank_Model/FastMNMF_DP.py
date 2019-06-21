@@ -10,6 +10,12 @@ import pickle as pic
 from configure_FastModel import *
 from FastFCA import FastFCA
 
+try:
+    from chainer import cuda
+    FLAG_GPU_Available = True
+except:
+    print("---Warning--- You cannot use GPU acceleration because chainer or cupy is not installed")
+
 class FastMNMF_DP(FastFCA):
 
     def __init__(self, speech_VAE=None, NUM_noise=1, NUM_Z_iteration=30, DIM_latent=16, NUM_basis_noise=2, xp=np, MODE_initialize_covarianceMatrix="unit", MODE_update_Z="sampling", normalize_encoder_input=True):
@@ -289,7 +295,7 @@ class FastMNMF_DP(FastFCA):
     def save_parameter(self, fileName):
         param_list = [self.lambda_NFT, self.covarianceDiag_NFM, self.diagonalizer_FMM, self.u_F, self.v_T, self.Z_speech_DT, self.W_noise_NnFK, self.H_noise_NnKT]
         if self.xp != np:
-            param_list = [chainer.cuda.to_cpu(param) for param in param_list]
+            param_list = [self.convert_to_NumpyArray(param) for param in param_list]
 
         pic.dump(param_list, open(fileName, "wb"))
 
@@ -297,7 +303,7 @@ class FastMNMF_DP(FastFCA):
     def load_parameter(self, fileName):
         param_list = pic.load(open(fileName, "rb"))
         if self.xp != np:
-            param_list = [chainer.cuda.to_gpu(param) for param in param_list]
+            param_list = [cuda.to_gpu(param) for param in param_list]
 
         self.lambda_NFT, self.covarianceDiag_NFM, self.diagonalizer_FMM, self.u_F, self.v_T, self.Z_speech_DT, self.W_noise_NnFK, self.H_noise_NnKT = param_list
 

@@ -4,18 +4,19 @@
 import numpy as np
 import chainer
 import sys, os
-from chainer import functions as chf
-from chainer import cuda, serializers
-from progressbar import progressbar
 import librosa
 import soundfile as sf
 import time
 import pickle as pic
 
-sys.path.append("/home/sekiguch/Dropbox/program/python/my_python_library")
-sys.path.append("../my_python_library")
 from configure_FastModel import *
 from FastFCA import FastFCA
+
+try:
+    from chainer import cuda
+    FLAG_GPU_Available = True
+except:
+    print("---Warning--- You cannot use GPU acceleration because chainer or cupy is not installed")
 
 
 class FastMNMF(FastFCA):
@@ -150,7 +151,7 @@ class FastMNMF(FastFCA):
     def save_parameter(self, fileName):
         param_list = [self.lambda_NFT, self.covarianceDiag_NFM, self.diagonalizer_FMM, self.W_NFK, self.H_NKT]
         if self.xp != np:
-            param_list = [chainer.cuda.to_cpu(param) for param in param_list]
+            param_list = [self.convert_to_NumpyArray(param) for param in param_list]
 
         pic.dump(param_list, open(fileName, "wb"))
 
@@ -158,7 +159,7 @@ class FastMNMF(FastFCA):
     def load_parameter(self, fileName):
         param_list = pic.load(open(fileName, "rb"))
         if self.xp != np:
-            param_list = [chainer.cuda.to_gpu(param) for param in param_list]
+            param_list = [cuda.to_gpu(param) for param in param_list]
 
         self.lambda_NFT, self.covarianceDiag_NFM, self.diagonalizer_FMM, self.W_NFK, self.H_NKT = param_list
 
