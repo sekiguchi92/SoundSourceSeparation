@@ -21,7 +21,7 @@ Tools for multi-channel speech enhancement (and source separation)
 python3 FastMNMF.py [input_filename] --gpu [gpu_id]
 ```
 Input is the multichannel observed signals.  
-If gpu_id < 0, CPU is used, and chainer and cupy are not necessary.
+If gpu_id < 0, CPU is used, and cupy is not necessary.
 
 
 ## Citation
