@@ -25,13 +25,6 @@ except:
     print("---Warning--- You cannot use cupy inverse calculation")
     FLAG_CupyInverse_Enabled = False
 
-try:
-    from cupy_eig import det_Hermitian
-    FLAG_CupyDeterminant_Enabled = True
-except:
-    print("---Warning--- You cannot use cupy complex determinant (this function is useful only when you calculate log likelihood)")
-    FLAG_CupyDeterminant_Enabled = False
-
 
 class FastFCA():
 
@@ -255,10 +248,7 @@ class FastFCA():
 
 
     def calculate_log_likelihood(self):
-        if FLAG_CupyDeterminant_Enabled:
-            return (-(self.Qx_power_FTM / self.Y_FTM).sum() + self.NUM_time * self.xp.log(det_Hermitian(self.diagonalizer_FMM @ self.diagonalizer_FMM.conj().transpose(0, 2, 1) ) ).sum() - self.xp.log(self.Y_FTM).sum()).real - self.NUM_mic * self.NUM_freq * self.NUM_time * self.xp.log(self.xp.pi)
-        else:
-            return (-(self.Qx_power_FTM / self.Y_FTM).sum() + self.NUM_time * np.log(np.linalg.det(self.convert_to_NumpyArray(self.diagonalizer_FMM @ self.diagonalizer_FMM.conj().transpose(0, 2, 1) ) ) ).sum() - self.xp.log(self.Y_FTM).sum()).real - self.NUM_mic * self.NUM_freq * self.NUM_time * np.log(np.pi)
+        return (-(self.Qx_power_FTM / self.Y_FTM).sum() + self.NUM_time * np.log(np.linalg.det(self.convert_to_NumpyArray(self.diagonalizer_FMM @ self.diagonalizer_FMM.conj().transpose(0, 2, 1) ) ) ).sum() - self.xp.log(self.Y_FTM).sum()).real - self.NUM_mic * self.NUM_freq * self.NUM_time * np.log(np.pi)
 
 
     def calculate_covarianceMatrix(self):
