@@ -236,7 +236,7 @@ class FastFCA():
 
 
     def normalize(self):
-        phi_F = self.xp.trace(self.diagonalizer_FMM @ self.diagonalizer_FMM.conj().transpose(0, 2, 1), axis1=1, axis2=2).real / self.NUM_mic
+        phi_F = self.xp.sum(self.diagonalizer_FMM * self.diagonalizer_FMM.conj(), axis=(1, 2)).real / self.NUM_mic
         self.diagonalizer_FMM = self.diagonalizer_FMM / self.xp.sqrt(phi_F)[:, None, None]
         self.covarianceDiag_NFM = self.covarianceDiag_NFM / phi_F[None, :, None]
 
@@ -313,12 +313,14 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument(             '--gpu', type=  int, default=    0, help='GPU ID')##
+    parser.add_argument(    'input_fileName', type= str, help='filename of the multichannel observed signals')
+    parser.add_argument(         '--file_id', type= str, default="None", help='file id')
+    parser.add_argument(             '--gpu', type=  int, default=    0, help='GPU ID')
     parser.add_argument(           '--n_fft', type=  int, default= 1024, help='number of frequencies')
-    parser.add_argument(       '--NUM_noise', type=  int, default=    1, help='number of noise')
+    parser.add_argument(      '--NUM_source', type=  int, default=    2, help='number of noise')
     parser.add_argument(   '--NUM_iteration', type=  int, default=  100, help='number of iteration')
     parser.add_argument(       '--NUM_basis', type=  int, default=    8, help='number of basis')
-    parser.add_argument( '--MODE_initialize_covarianceMatrix', type=  str, default="obs", help='cGMM, cGMM2, unit, obs')
+    parser.add_argument( '--MODE_initialize_covarianceMatrix', type=  str, default="obs", help='unit, obs')
     args = parser.parse_args()
 
     if args.gpu < 0:
@@ -328,7 +330,7 @@ if __name__ == "__main__":
         print("Use GPU " + str(args.gpu))
         cuda.get_device_from_id(args.gpu).use()
 
-    wav, fs = sf.read("../../data/chime/F04_050C0115_CAF.CH13456.wav")
+    wav, fs = sf.read(args.input_fileName)
     wav = wav.T
     M = len(wav)
     for m in range(M):
@@ -337,7 +339,7 @@ if __name__ == "__main__":
             spec = np.zeros([tmp.shape[0], tmp.shape[1], M], dtype=np.complex)
         spec[:, :, m] = tmp
 
-    separater = FastFCA(NUM_source=args.NUM_noise+1, xp=xp, MODE_initialize_covarianceMatrix=args.MODE_initialize_covarianceMatrix)
+    separater = FastFCA(NUM_source=args.NUM_source, xp=xp, MODE_initialize_covarianceMatrix=args.MODE_initialize_covarianceMatrix)
     separater.load_spectrogram(spec)
     separater.file_id = file_id
-    separater.solve(NUM_iteration=args.NUM_iteration, save_likelihood=False, save_parameter=False, save_wav=False, save_path="./", interval_save_parameter=1000)
+    separater.solve(NUM_iteration=args.NUM_iteration, save_likelihood=False, save_parameter=False, save_wav=False, save_path="./", interval_save_parameter=25)

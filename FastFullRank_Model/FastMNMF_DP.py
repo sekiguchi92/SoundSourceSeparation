@@ -53,8 +53,8 @@ class FastMNMF_DP(FastFCA):
         -----------
         X_FTM: xp.array [F x T x M]
         """
-        super(FastMNMF_DP, self).load_spectrogram(X_FTM)
         self.xp = self.speech_VAE.xp
+        super(FastMNMF_DP, self).load_spectrogram(X_FTM)
         self.u_F = self.xp.random.rand(self.NUM_freq).astype(self.xp.float)
         self.v_T = (self.xp.random.rand(self.NUM_time).astype(self.xp.float) * 0.9) + 0.1
         self.Z_speech_DT = self.xp.random.normal(0, 1, [self.DIM_latent, self.NUM_time]).astype(self.xp.float32)
@@ -154,7 +154,7 @@ class FastMNMF_DP(FastFCA):
 
 
     def normalize(self):
-        phi_F = self.xp.trace(self.diagonalizer_FMM @ self.diagonalizer_FMM.conj().transpose(0, 2, 1), axis1=1, axis2=2).real / self.NUM_mic
+        phi_F = self.xp.sum(self.diagonalizer_FMM * self.diagonalizer_FMM.conj(), axis=(1, 2)).real / self.NUM_mic
         self.diagonalizer_FMM = self.diagonalizer_FMM / self.xp.sqrt(phi_F)[:, None, None]
         self.covarianceDiag_NFM = self.covarianceDiag_NFM / phi_F[None, :, None]
 
@@ -177,41 +177,17 @@ class FastMNMF_DP(FastFCA):
 
 
     def update_WH_noise(self):
-        if self.xp == np:
-            for f in range(self.NUM_freq):
-                a_1 = self.xp.zeros([self.NUM_noise, self.NUM_basis_noise])
-                b_1 = self.xp.zeros([self.NUM_noise, self.NUM_basis_noise])
-                for m in range(self.NUM_mic):
-                    a_1 += (self.H_noise_NnKT * (self.covarianceDiag_NFM[1:, f, None, m] * (self.Qx_power_FTM[f, :, m] / (self.Y_FTM[f, :, m] ** 2))[None])[:, None]).sum(axis=2)  # N K T
-                    b_1 += (self.H_noise_NnKT * (self.covarianceDiag_NFM[1:, f, None, m] / self.Y_FTM[None, f, :, m])[:, None]).sum(axis=2)
-                self.W_noise_NnFK[:, f] = self.W_noise_NnFK[:, f] * self.xp.sqrt(a_1 / b_1)
+        tmp1_NnFT = (self.covarianceDiag_NFM[1, :, None] * (self.Qx_power_FTM / (self.Y_FTM ** 2))[None]).sum(axis=3)
+        tmp2_NnFT = (self.covarianceDiag_NFM[1, :, None] / self.Y_FTM[None]).sum(axis=3)
+        a_W = (self.H_noise_NnKT[:, None] * tmp1_NnFT[:, :, None]).sum(axis=3)  # N F K T M
+        b_W = (self.H_noise_NnKT[:, None] * tmp2_NnFT[:, :, None]).sum(axis=3)
+        a_H = (self.W_noise_NnFK[..., None] * tmp1_NnFT[:, :, None] ).sum(axis=1) # N F K T M
+        b_H = (self.W_noise_NnFK[..., None] * tmp2_NnFT[:, :, None]).sum(axis=1) # N F K T M
+        self.W_noise_NnFK = self.W_noise_NnFK * self.xp.sqrt(a_W / b_W)
+        self.H_noise_NnKT = self.H_noise_NnKT * self.xp.sqrt(a_H / b_H)
 
-            self.lambda_NFT[1:] = self.W_noise_NnFK @ self.H_noise_NnKT
-            self.Y_FTM = (self.lambda_NFT[..., None] * self.covarianceDiag_NFM[:, :, None]).sum(axis=0)
-
-            for t in range(self.NUM_time):
-                a_1 = self.xp.zeros([self.NUM_noise, self.NUM_basis_noise])
-                b_1 = self.xp.zeros([self.NUM_noise, self.NUM_basis_noise])
-                for m in range(self.NUM_mic):
-                    a_1 = (self.W_noise_NnFK * (self.covarianceDiag_NFM[1:, :, m] * (self.Qx_power_FTM[:, t, m] / (self.Y_FTM[:, t, m] ** 2))[None])[:, :, None] ).sum(axis=1) # N F K
-                    b_1 = (self.W_noise_NnFK * (self.covarianceDiag_NFM[1:, :, m] / self.Y_FTM[None, :, t, m])[:, :, None]).sum(axis=1) # N F K
-                self.H_noise_NnKT[:, :, t] = self.H_noise_NnKT[:, :, t] * self.xp.sqrt(a_1 / b_1)
-
-            self.lambda_NFT[1:] = self.W_noise_NnFK @ self.H_noise_NnKT
-            self.Y_FTM = (self.lambda_NFT[..., None] * self.covarianceDiag_NFM[:, :, None]).sum(axis=0)
-
-        else:
-            a_1 = (self.H_noise_NnKT[:, None, :, :, None] * (self.covarianceDiag_NFM[1:, :, None] * (self.Qx_power_FTM / (self.Y_FTM ** 2))[None])[:, :, None]).sum(axis=4).sum(axis=3)  # N F K T M
-            b_1 = (self.H_noise_NnKT[:, None, :, :, None] * (self.covarianceDiag_NFM[1:, :, None] / self.Y_FTM[None])[:, :, None]).sum(axis=4).sum(axis=3)
-            self.W_noise_NnFK = self.W_noise_NnFK * self.xp.sqrt(a_1 / b_1)
-            self.lambda_NFT[1:] = self.W_noise_NnFK @ self.H_noise_NnKT
-            self.Y_FTM = (self.lambda_NFT[..., None] * self.covarianceDiag_NFM[:, :, None]).sum(axis=0)
-
-            a_1 = (self.W_noise_NnFK[..., None, None] * (self.covarianceDiag_NFM[1:, :, None] * (self.Qx_power_FTM / (self.Y_FTM ** 2))[None])[:, :, None] ).sum(axis=4).sum(axis=1) # N F K T M
-            b_1 = (self.W_noise_NnFK[..., None, None] * (self.covarianceDiag_NFM[1:, :, None] / self.Y_FTM[None])[:, :, None]).sum(axis=4).sum(axis=1) # N F K T M
-            self.H_noise_NnKT = self.H_noise_NnKT * self.xp.sqrt(a_1 / b_1)
-            self.lambda_NFT[1:] = self.W_noise_NnFK @ self.H_noise_NnKT
-            self.Y_FTM = (self.lambda_NFT[..., None] * self.covarianceDiag_NFM[:, :, None]).sum(axis=0)
+        self.lambda_NFT[1:] = self.W_noise_NnFK @ self.H_noise_NnKT
+        self.Y_FTM = (self.lambda_NFT[..., None] * self.covarianceDiag_NFM[:, :, None]).sum(axis=0)
 
 
     def update_UV(self):
@@ -260,29 +236,15 @@ class FastMNMF_DP(FastFCA):
             Z_speech_old_DT = self.Z_speech_DT
             power_old_FTM = self.speech_VAE.decode_cupy(Z_speech_old_DT)[:, :, None]
 
-            # lambda_old_FTM = power_old_FTM * self.UVG_FTM + self.WHG_noise_FTM
-            # for it in range(self.NUM_Z_iteration):
-            #     Z_speech_new_DT = chf.gaussian(Z_speech_old_DT, log_var).data
-            #     power_new_FTM = self.speech_VAE.decode_cupy(Z_speech_new_DT)
-            #     lambda_new_FTM = power_new_FTM[:, :, None] * self.UVG_FTM + self.WHG_noise_FTM
-            #     # acceptance_rate = self.xp.exp((self.Qx_power_FTM * (1 / lambda_old_FTM - 1 / lambda_new_FTM) + self.xp.log( lambda_old_FTM /  lambda_new_FTM)).sum(axis=2).sum(axis=0) + (Z_speech_old_DT ** 2 - Z_speech_new_DT ** 2).sum(axis=0) / 2 )
-            #     acceptance_rate = self.xp.exp((self.Qx_power_FTM * (1 / lambda_old_FTM - 1 / lambda_new_FTM) + self.xp.log( lambda_old_FTM /  lambda_new_FTM)).sum(axis=2).sum(axis=0) )
-            #     acceptance_boolean = self.xp.random.random([self.NUM_time]) < acceptance_rate
-            #     Z_speech_old_DT[:, acceptance_boolean] = Z_speech_new_DT[:, acceptance_boolean]
-            #     lambda_old_FTM[:, acceptance_boolean] = lambda_new_FTM[:, acceptance_boolean]
             for it in range(self.NUM_Z_iteration):
                 Z_speech_new_DT = chf.gaussian(Z_speech_old_DT, log_var).data
                 lambda_old_FTM = power_old_FTM * self.UVG_FTM + self.WHG_noise_FTM
                 power_new_FTM = self.speech_VAE.decode_cupy(Z_speech_new_DT)[:, :, None]
                 lambda_new_FTM = power_new_FTM * self.UVG_FTM + self.WHG_noise_FTM
-
-                # acceptance_rate = self.xp.exp((self.Qx_power_FTM * (1 / lambda_old_FTM - 1 / lambda_new_FTM)).sum(axis=2).sum(axis=0) + self.xp.log( ( lambda_old_FTM / lambda_new_FTM ).prod(axis=2).prod(axis=0) ) + (Z_speech_old_DT ** 2 - Z_speech_new_DT ** 2).sum(axis=0) / 2)
                 acceptance_rate = self.xp.exp((self.Qx_power_FTM * (1 / lambda_old_FTM - 1 / lambda_new_FTM)).sum(axis=2).sum(axis=0) + self.xp.log( ( lambda_old_FTM / lambda_new_FTM ).prod(axis=2).prod(axis=0) ) )
-                acceptance_boolean = self.xp.random.random([self.NUM_time]) < acceptance_rate
-
-                # print(Z_speech_new_DT.shape, Z_speech_old_DT.shape, acceptance_boolean.shape)
-                Z_speech_old_DT[:, acceptance_boolean] = Z_speech_new_DT[:, acceptance_boolean]
-                power_old_FTM[:, acceptance_boolean] = power_new_FTM[:, acceptance_boolean]
+                accept_flag = self.xp.random.random([self.NUM_time]) < acceptance_rate
+                Z_speech_old_DT[:, accept_flag] = Z_speech_new_DT[:, accept_flag]
+                power_old_FTM[:, accept_flag] = power_new_FTM[:, accept_flag]
 
             self.Z_speech_DT = Z_speech_old_DT
             self.z_link_speech.z = chainer.Parameter(self.Z_speech_DT.T)
@@ -296,7 +258,6 @@ class FastMNMF_DP(FastFCA):
         param_list = [self.lambda_NFT, self.covarianceDiag_NFM, self.diagonalizer_FMM, self.u_F, self.v_T, self.Z_speech_DT, self.W_noise_NnFK, self.H_noise_NnKT]
         if self.xp != np:
             param_list = [self.convert_to_NumpyArray(param) for param in param_list]
-
         pic.dump(param_list, open(fileName, "wb"))
 
 
@@ -304,7 +265,6 @@ class FastMNMF_DP(FastFCA):
         param_list = pic.load(open(fileName, "rb"))
         if self.xp != np:
             param_list = [cuda.to_gpu(param) for param in param_list]
-
         self.lambda_NFT, self.covarianceDiag_NFM, self.diagonalizer_FMM, self.u_F, self.v_T, self.Z_speech_DT, self.W_noise_NnFK, self.H_noise_NnKT = param_list
 
 
@@ -366,4 +326,4 @@ if __name__ == "__main__":
     separater.load_spectrogram(spec)
     separater.file_id = args.file_id
     separater.name_DNN = name_DNN
-    separater.solve(NUM_iteration=args.NUM_iteration, save_likelihood=False, save_parameter=False, save_path="./", interval_save_parameter=300)
+    separater.solve(NUM_iteration=args.NUM_iteration, save_likelihood=False, save_parameter=False, save_path="./", interval_save_parameter=25)

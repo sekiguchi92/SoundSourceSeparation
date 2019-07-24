@@ -94,45 +94,21 @@ class FastMNMF(FastFCA):
 
 
     def update_WH(self):
-        if self.xp == np:
-            for f in range(self.NUM_freq):
-                a_1 = self.xp.zeros([self.NUM_source, self.NUM_basis])
-                b_1 = self.xp.zeros([self.NUM_source, self.NUM_basis])
-                for m in range(self.NUM_mic):
-                    a_1 += (self.H_NKT * (self.covarianceDiag_NFM[:, f, None, m] * (self.Qx_power_FTM[f, :, m] / (self.Y_FTM[f, :, m] ** 2))[None])[:, None]).sum(axis=2)  # N K T
-                    b_1 += (self.H_NKT * (self.covarianceDiag_NFM[:, f, None, m] / self.Y_FTM[None, f, :, m])[:, None]).sum(axis=2)
-                self.W_NFK[:, f] = self.W_NFK[:, f] * self.xp.sqrt(a_1 / b_1)
+        tmp1_NFT = (self.covarianceDiag_NFM[:, :, None] * (self.Qx_power_FTM / (self.Y_FTM ** 2))[None]).sum(axis=3)
+        tmp2_NFT = (self.covarianceDiag_NFM[:, :, None] / self.Y_FTM[None]).sum(axis=3)
+        a_W = (self.H_NKT[:, None] * tmp1_NFT[:, :, None]).sum(axis=3)  # N F K T M
+        b_W = (self.H_NKT[:, None] * tmp2_NFT[:, :, None]).sum(axis=3)
+        a_H = (self.W_NFK[..., None] * tmp1_NFT[:, :, None] ).sum(axis=1) # N F K T M
+        b_H = (self.W_NFK[..., None] * tmp2_NFT[:, :, None]).sum(axis=1) # N F K T M
+        self.W_NFK = self.W_NFK * self.xp.sqrt(a_W / b_W)
+        self.H_NKT = self.H_NKT * self.xp.sqrt(a_H / b_H)
 
-            self.lambda_NFT = self.W_NFK @ self.H_NKT
-            self.Y_FTM = (self.lambda_NFT[..., None] * self.covarianceDiag_NFM[:, :, None]).sum(axis=0)
-
-            for t in range(self.NUM_time):
-                a_1 = self.xp.zeros([self.NUM_source, self.NUM_basis])
-                b_1 = self.xp.zeros([self.NUM_source, self.NUM_basis])
-                for m in range(self.NUM_mic):
-                    a_1 += (self.W_NFK * (self.covarianceDiag_NFM[:, :, m] * (self.Qx_power_FTM[:, t, m] / (self.Y_FTM[:, t, m] ** 2))[None])[:, :, None] ).sum(axis=1) # N F K
-                    b_1 += (self.W_NFK * (self.covarianceDiag_NFM[:, :, m] / self.Y_FTM[None, :, t, m])[:, :, None]).sum(axis=1) # N F K
-                self.H_NKT[:, :, t] = self.H_NKT[:, :, t] * self.xp.sqrt(a_1 / b_1)
-
-            self.lambda_NFT = self.W_NFK @ self.H_NKT
-            self.Y_FTM = (self.lambda_NFT[..., None] * self.covarianceDiag_NFM[:, :, None]).sum(axis=0)
-
-        else:
-            a_1 = (self.H_NKT[:, None, :, :, None] * (self.covarianceDiag_NFM[:, :, None] * (self.Qx_power_FTM / (self.Y_FTM ** 2))[None])[:, :, None]).sum(axis=4).sum(axis=3)  # N F K T M
-            b_1 = (self.H_NKT[:, None, :, :, None] * (self.covarianceDiag_NFM[:, :, None] / self.Y_FTM[None])[:, :, None]).sum(axis=4).sum(axis=3)
-            self.W_NFK = self.W_NFK * self.xp.sqrt(a_1 / b_1)
-            self.lambda_NFT = self.W_NFK @ self.H_NKT
-            self.Y_FTM = (self.lambda_NFT[..., None] * self.covarianceDiag_NFM[:, :, None]).sum(axis=0)
-
-            a_1 = (self.W_NFK[..., None, None] * (self.covarianceDiag_NFM[:, :, None] * (self.Qx_power_FTM / (self.Y_FTM ** 2))[None])[:, :, None] ).sum(axis=4).sum(axis=1) # N F K T M
-            b_1 = (self.W_NFK[..., None, None] * (self.covarianceDiag_NFM[:, :, None] / self.Y_FTM[None])[:, :, None]).sum(axis=4).sum(axis=1) # N F K T M
-            self.H_NKT = self.H_NKT * self.xp.sqrt(a_1 / b_1)
-            self.lambda_NFT = self.W_NFK @ self.H_NKT
-            self.Y_FTM = (self.lambda_NFT[..., None] * self.covarianceDiag_NFM[:, :, None]).sum(axis=0)
+        self.lambda_NFT = self.W_NFK @ self.H_NKT
+        self.Y_FTM = (self.lambda_NFT[..., None] * self.covarianceDiag_NFM[:, :, None]).sum(axis=0)
 
 
     def normalize(self):
-        phi_F = self.xp.trace(self.diagonalizer_FMM @ self.diagonalizer_FMM.conj().transpose(0, 2, 1), axis1=1, axis2=2).real / self.NUM_mic
+        phi_F = self.xp.sum(self.diagonalizer_FMM * self.diagonalizer_FMM.conj(), axis=(1, 2)).real / self.NUM_mic
         self.diagonalizer_FMM = self.diagonalizer_FMM / self.xp.sqrt(phi_F)[:, None, None]
         self.covarianceDiag_NFM = self.covarianceDiag_NFM / phi_F[None, :, None]
 
@@ -173,9 +149,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(    'input_fileName', type= str, help='filename of the multichannel observed signals')
     parser.add_argument(         '--file_id', type= str, default="None", help='file id')
-    parser.add_argument(             '--gpu', type= int, default=    0, help='GPU ID')##
+    parser.add_argument(             '--gpu', type= int, default=    0, help='GPU ID')
     parser.add_argument(           '--n_fft', type= int, default= 1024, help='number of frequencies')
-    parser.add_argument(       '--NUM_noise', type= int, default=    1, help='number of noise')
+    parser.add_argument(      '--NUM_source', type= int, default=    2, help='number of noise')
     parser.add_argument(   '--NUM_iteration', type= int, default=  100, help='number of iteration')
     parser.add_argument(       '--NUM_basis', type= int, default=    8, help='number of basis')
     parser.add_argument( '--MODE_initialize_covarianceMatrix', type=  str, default="obs", help='cGMM, cGMM2, unit, obs')
@@ -197,7 +173,7 @@ if __name__ == "__main__":
             spec = np.zeros([tmp.shape[0], tmp.shape[1], M], dtype=np.complex)
         spec[:, :, m] = tmp
 
-    separater = FastMNMF(NUM_source=args.NUM_noise+1, NUM_basis=args.NUM_basis, xp=xp, MODE_initialize_covarianceMatrix=args.MODE_initialize_covarianceMatrix)
+    separater = FastMNMF(NUM_source=args.NUM_source, NUM_basis=args.NUM_basis, xp=xp, MODE_initialize_covarianceMatrix=args.MODE_initialize_covarianceMatrix)
     separater.load_spectrogram(spec)
     separater.file_id = args.file_id
-    separater.solve(NUM_iteration=args.NUM_iteration, save_likelihood=False, save_parameter=False, save_wav=False, save_path="./", interval_save_parameter=50)
+    separater.solve(NUM_iteration=args.NUM_iteration, save_likelihood=False, save_parameter=False, save_wav=False, save_path="./", interval_save_parameter=25)
