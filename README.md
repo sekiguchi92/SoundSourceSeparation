@@ -1,10 +1,11 @@
 # SpeechEnhancement
 Tools for multi-channel speech enhancement (and source separation)
-* FastFullRank_Model includes 3 types of methods called FastFCA, FastMNMF, and FastMNMF-DP (Deep Prior) with iterative-projection (IP) method.
+* FullRank_Model includes 3 types of method called FCA, MNMF, MNMF-DP (MNMF with a deep prior)
+* FastFullRank_Model includes 3 types of methods called FastFCA, FastMNMF, and FastMNMF-DP (FastMNMF with a deep prior) with iterative-projection (IP) method. These methods are extension of FCA, MNMF, MNMF-DP, respectively.
   - FastFCA is a method for general source separation. In fact, it can be available only for speech enhancement because of the strong initial value dependency.
   - FastMNMF is a general source separation method which integrate NMF-based source model into FastFCA.
   - FastMNMF-DP is a method which integrates deep speech prior into FastMNMF, and is for speech enhancement.
-* We plan to add full-rank model (FCA, MNMF, and MNMF-DP) and rank-1 model (ILRMA, and ILRMA-DP) in the future.
+* We plan to add rank-1 model (ILRMA, and ILRMA-DP) in the future.
 
 ## Requirement
 * Tested on Python3.6
