@@ -5,7 +5,7 @@ Tools for multi-channel speech enhancement (and source separation)
 FullRank_Model includes 3 methods called Full-rank Spatial Covariance Analysis (FCA), Multichannel Nonnegative Matrix Factorization(MNMF), MNMF with a deep prior (MNMF-DP).  
 These methods are based on full-rank spatial model.
 
- * FCA is a method for general source separation based on full-rank spatial model. In fact, it can be available only for speech enhancement because of the strong initial value dependency.
+ * FCA is a method for general source separation. In fact, it can be available only for speech enhancement because of the strong initial value dependency.
  * MNMF is a general source separation method which integrate NMF-based source model into FCA.
  * MNMF-DP is a method which integrates deep speech prior into MNMF, and is only for speech enhancement.
  
