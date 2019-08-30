@@ -88,29 +88,11 @@ class FastFCA():
         self.NUM_freq, self.NUM_time, self.NUM_mic = X_FTM.shape
         self.X_FTM = self.xp.asarray(X_FTM, dtype=self.xp.complex)
         self.XX_FTMM = self.X_FTM[:, :, :, None] @ self.X_FTM[:, :, None, :].conj()
-        self.lambda_NFT = self.xp.random.random([self.NUM_source, self.NUM_freq, self.NUM_time]).astype(self.xp.float)
-        self.covarianceDiag_NFM = self.xp.ones([self.NUM_source, self.NUM_freq, self.NUM_mic], dtype=self.xp.float) / self.NUM_mic
-        self.diagonalizer_FMM = self.xp.zeros([self.NUM_freq, self.NUM_mic, self.NUM_mic], dtype=self.xp.complex)
-        self.diagonalizer_FMM[:] = self.xp.eye(self.NUM_mic).astype(self.xp.complex)
-
-
-    def check_parameter(self):
-        param_list = [self.lambda_NFT, self.covarianceDiag_NFM, self.diagonalizer_FMM]
-        param_name_list = ["lambda_NFT", "covarianceDiag_NFM", "diagonalizer_FMM"]
-        flag = 0
-        for i, param in enumerate(param_list):
-            if self.xp.isnan(param).any():
-                flag = 1
-                print("Error : " + param_name_list[i] + " have nan")
-            elif self.xp.isinf(param).any():
-                flag = 1
-                print("Error : " + param_name_list[i] + " have inf")
-        return flag
 
 
     def initialize_PSD(self):
+        self.lambda_NFT = self.xp.random.random([self.NUM_source, self.NUM_freq, self.NUM_time]).astype(self.xp.float)
         self.lambda_NFT[0] = self.xp.abs(self.X_FTM.mean(axis=2)) ** 2
-        self.reset_variable()
 
 
     def initialize_covarianceMatrix(self):
@@ -128,6 +110,7 @@ class FastFCA():
         covarianceMatrix_NFMM = covarianceMatrix_NFMM / self.xp.trace(covarianceMatrix_NFMM, axis1=2 ,axis2=3)[:, :, None, None]
         H_FMM = self.convert_to_NumpyArray(self.calculateInverseMatrix(covarianceMatrix_NFMM[1] @ covarianceMatrix_NFMM[0]))
         eig_val, eig_vec = np.linalg.eig(H_FMM)
+        self.covarianceDiag_NFM = self.xp.ones([self.NUM_source, self.NUM_freq, self.NUM_mic], dtype=self.xp.float) / self.NUM_mic
         self.diagonalizer_FMM = self.xp.asarray(eig_vec.transpose(0, 2, 1).conj())
         for f in range(self.NUM_freq):
             for n in range(self.NUM_source):
@@ -189,11 +172,6 @@ class FastFCA():
 
             if save_likelihood and ((it+1) % interval_save_parameter == 0) and ((it+1) != self.NUM_iteration):
                 log_likelihood_array.append(self.calculate_log_likelihood())
-
-        flag = self.check_parameter()
-        if flag == 1:
-            print("Error --- some parameters include Nan ---")
-            raise ValueError
 
         if save_parameter:
             self.save_parameter(save_path+"{}-parameter-{}.pic".format(self.method_name, self.fileName_suffix))

@@ -40,13 +40,6 @@ class FastMNMF(FastFCA):
         self.method_name = "FastMNMF"
 
 
-    def load_spectrogram(self, X_FTM):
-        super(FastMNMF, self).load_spectrogram(X_FTM)
-        self.W_NFK = self.xp.abs(self.xp.random.rand(self.NUM_source, self.NUM_freq, self.NUM_basis).astype(self.xp.float))
-        self.H_NKT = self.xp.abs(self.xp.random.rand(self.NUM_source, self.NUM_basis, self.NUM_time).astype(self.xp.float))
-        self.lambda_NFT = self.W_NFK @ self.H_NKT
-
-
     def set_parameter(self, NUM_source=None, NUM_basis=None, MODE_initialize_covarianceMatrix=None):
         """ set parameters
 
@@ -67,12 +60,9 @@ class FastMNMF(FastFCA):
         power_observation_FT = (self.xp.abs(self.X_FTM).astype(self.xp.float32) ** 2).mean(axis=2)
         shape = 2
         self.W_NFK = self.xp.random.dirichlet(np.ones(self.NUM_freq)*shape, size=[self.NUM_source, self.NUM_basis]).transpose(0, 2, 1)
-
         self.H_NKT = self.xp.random.gamma(shape, (power_observation_FT.mean() * self.NUM_freq * self.NUM_mic / (self.NUM_source * self.NUM_basis)) / shape, size=[self.NUM_source, self.NUM_basis, self.NUM_time])
         self.H_NKT[self.H_NKT < EPS] = EPS
-
         self.lambda_NFT = self.W_NFK @ self.H_NKT
-        self.reset_variable()
 
 
     def make_fileName_suffix(self):
