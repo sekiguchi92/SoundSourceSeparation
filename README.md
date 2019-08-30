@@ -11,7 +11,7 @@ These methods are based on full-rank spatial model.
  
  
 ## Jointly Diagonalizable FullRank Model
-FastFullRank_Model includes 3 methods called FastFCA, FastMNMF, and FastMNMF-DP (FastMNMF with a deep prior) with iterative-projection (IP) method.   
+Jointly_Diagonalizable_FullRank_Model includes 3 methods called FastFCA, FastMNMF, and FastMNMF-DP (FastMNMF with a deep prior) with iterative-projection (IP) method.   
 These methods are based on the jointly diagonalizable full-rank spatial model, and they are extension of FCA, MNMF, MNMF-DP, respectively.
 
   - FastFCA is a method for general source separation. In fact, it can be available only for speech enhancement because of the strong initial value dependency.
