@@ -17,15 +17,21 @@ from configure import *
 
 class MNMF_DP(FCA):
 
-    def __init__(self, NUM_noise=1, NUM_Z_iteration=30, speech_VAE=None, DIM_latent=16, NUM_basis_noise=2, xp=np, MODE_initialize_covarianceMatrix="unit", MODE_update_parameter=["all", "Z", "one_by_one"][1], MODE_update_Z=["sampling", "backprop"][0], normalize_input=True):
+    def __init__(self, speech_VAE=None, NUM_noise=1, NUM_Z_iteration=30, DIM_latent=16, NUM_basis_noise=2, xp=np, MODE_initialize_covarianceMatrix="unit", MODE_update_parameter=["all", "Z", "one_by_one"][1], MODE_update_Z=["sampling", "backprop"][0], normalize_encoder_input=True):
         """ initialize MNMF
 
         Parameters:
         -----------
-            NUM_source: int
-                the number of sources
-            NUM_basis: int
-                the number of bases of each source
+            speech_VAE: VAE
+                trained speech VAE network
+            NUM_noise: int
+                the number of noise sources
+            NUM_Z_iteration: int
+                the number of iteration for updating Z per global iteration
+            DIM_latent: int
+                the dimension of latent variable Z
+            NUM_basis_noise: int
+                the number of bases of each noise source
             xp : numpy or cupy
             MODE_initialize_covarianceMatrix: str
                 how to initialize covariance matrix {unit, obs, cGMM}
@@ -34,6 +40,8 @@ class MNMF_DP(FCA):
                 'one_by_one' : update one by one
             MODE_update_Z: str
                 how to update latent variable Z {sampling, backprop}
+            normalize_encoder_input: boolean
+                normalize observation to initialize latent variable by feeding the observation into a encoder
         """
         super(MNMF_DP, self).__init__(NUM_source=NUM_noise+1, xp=xp, MODE_initialize_covarianceMatrix=MODE_initialize_covarianceMatrix, MODE_update_parameter=MODE_update_parameter)
         self.NUM_source, self.NUM_noise, self.NUM_speech = NUM_noise+1, NUM_noise, 1
@@ -42,7 +50,7 @@ class MNMF_DP(FCA):
         self.DIM_latent = DIM_latent
         self.speech_VAE = speech_VAE
         self.MODE_update_Z = MODE_update_Z
-        self.normalize_input = normalize_input
+        self.normalize_encoder_input = normalize_encoder_input
         self.method_name = "MNMF_DP"
 
 
@@ -83,14 +91,13 @@ class MNMF_DP(FCA):
         power_observation_FT = (self.xp.abs(self.X_FTM) ** 2).mean(axis=2)
         shape = 2
         self.W_noise_NnFK = self.xp.random.dirichlet(np.ones(self.NUM_freq)*shape, size=[self.NUM_noise, self.NUM_basis_noise]).transpose(0, 2, 1)
-
         self.H_noise_NnKT = self.xp.random.gamma(shape, (power_observation_FT.mean() * self.NUM_freq * self.NUM_mic / (self.NUM_noise * self.NUM_basis_noise)) / shape, size=[self.NUM_noise, self.NUM_basis_noise, self.NUM_time])
         self.H_noise_NnKT[self.H_noise_NnKT < EPS] = EPS
 
         self.u_F = self.xp.ones(self.NUM_freq) / self.NUM_freq
         self.v_T = self.xp.ones(self.NUM_time)
 
-        if self.normalize_input:
+        if self.normalize_encoder_input:
             power_observation_FT = power_observation_FT / power_observation_FT.sum(axis=0).mean()
         self.Z_speech_DT = self.speech_VAE.encode_cupy(power_observation_FT.astype(self.xp.float32))
         self.z_link_speech = Z_link(self.Z_speech_DT.T)
@@ -407,4 +414,4 @@ if __name__ == "__main__":
     separater.load_spectrogram(spec)
     separater.name_DNN = name_DNN
     separater.file_id = args.file_id
-    separater.solve(NUM_iteration=args.NUM_iteration, save_likelihood=False, save_parameter=False, save_dir="./", interval_save_parameter=100)
+    separater.solve(NUM_iteration=args.NUM_iteration, save_likelihood=False, save_parameter=False, save_path="./", interval_save_parameter=100)

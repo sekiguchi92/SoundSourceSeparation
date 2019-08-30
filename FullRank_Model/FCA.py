@@ -129,7 +129,7 @@ class FCA:
         self.lambda_NFT[0] = self.xp.abs(self.X_FTM.mean(axis=2)) ** 2
 
 
-    def solve(self, NUM_iteration=100, save_likelihood=False, save_parameter=False, save_wav=False, save_dir="./", interval_save_parameter=30):
+    def solve(self, NUM_iteration=100, save_likelihood=False, save_parameter=False, save_wav=False, save_path="./", interval_save_parameter=30):
         """
         Parameters:
             save_likelihood: boolean
@@ -138,7 +138,7 @@ class FCA:
                 save parameter or not
             save_wav: boolean
                 save intermediate separated signal or not
-            save_dir: str
+            save_path: str
                 directory for saving data
             interval_save_parameter: int
                 interval of saving parameter
@@ -154,24 +154,24 @@ class FCA:
             self.update()
 
             if save_parameter and (it > 0) and ((it+1) % interval_save_parameter == 0) and ((it+1) != self.NUM_iteration):
-                self.save_parameter(save_dir+"{}-parameter-{}-{}.pic".format(self.method_name, self.filename_suffix, it + 1))
+                self.save_parameter(save_path+"{}-parameter-{}-{}.pic".format(self.method_name, self.filename_suffix, it + 1))
 
             if save_wav and (it > 0) and ((it+1) % interval_save_parameter == 0) and ((it+1) != self.NUM_iteration):
                 self.separate_WienerFilter(mic_index=MIC_INDEX)
-                self.save_separated_signal(save_dir+"{}-sep-Wiener-{}-{}.wav".format(self.method_name, self.filename_suffix, it + 1))
+                self.save_separated_signal(save_path+"{}-sep-Wiener-{}-{}.wav".format(self.method_name, self.filename_suffix, it + 1))
 
             if save_likelihood and (it > 0) and ((it+1) % interval_save_parameter == 0) and ((it+1) != self.NUM_iteration):
                 log_likelihood_array.append(self.calculate_log_likelihood())
 
         if save_parameter:
-            self.save_parameter(save_dir+"{}-parameter-{}.pic".format(self.method_name, self.filename_suffix))
+            self.save_parameter(save_path+"{}-parameter-{}.pic".format(self.method_name, self.filename_suffix))
 
         if save_likelihood:
             log_likelihood_array.append(self.calculate_log_likelihood())
-            pic.dump(log_likelihood_array, open(save_dir + "{}-likelihood-interval={}-{}.pic".format(self.method_name, interval_save_parameter, self.filename_suffix), "wb"))
+            pic.dump(log_likelihood_array, open(save_path + "{}-likelihood-interval={}-{}.pic".format(self.method_name, interval_save_parameter, self.filename_suffix), "wb"))
 
         self.separate_WienerFilter(mic_index=MIC_INDEX)
-        self.save_separated_signal(save_dir+"{}-sep-Wiener-{}.wav".format(self.method_name, self.filename_suffix))
+        self.save_separated_signal(save_path+"{}-sep-Wiener-{}.wav".format(self.method_name, self.filename_suffix))
 
 
     def make_filename_suffix(self):
@@ -311,4 +311,4 @@ if __name__ == "__main__":
     separater = FCA(NUM_source = args.NUM_source, xp=xp, MODE_initialize_covarianceMatrix=args.MODE_initialize_covarianceMatrix, MODE_update_parameter=args.MODE_update_parameter)
     separater.load_spectrogram(spec)
     separater.file_id = args.file_id
-    separater.solve(NUM_iteration=args.NUM_iteration, save_likelihood=False, save_parameter=False, save_dir="./", interval_save_parameter=300)
+    separater.solve(NUM_iteration=args.NUM_iteration, save_likelihood=False, save_parameter=False, save_path="./", interval_save_parameter=300)
