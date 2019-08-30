@@ -20,7 +20,10 @@ These methods are based on the jointly diagonalizable full-rank spatial model, a
   
   
 ## Rank-1 Model
-* We plan to add rank-1 model (ILRMA, and ILRMA-DP) in the future.
+Rank1_Model includes 2 methods called Independent Low-Rank Matrix Analysis (ILRMA) and ILRMA with a deep prior (ILRMA-DP).  
+These methods are based on rank-1 spatial model.
+ * ILRMA is a general source separation method which integrate NMF-based source model into rank-1 spatial model.
+ * ILRMA-DP is a method which integrates deep speech prior into ILRMA, and is only for speech enhancement.
 
 
 ## Requirement
