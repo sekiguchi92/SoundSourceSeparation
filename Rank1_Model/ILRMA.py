@@ -96,7 +96,7 @@ class ILRMA:
             return lambda x: cuda.to_gpu(np.linalg.inv(self.convert_to_NumpyArray(x)))
 
 
-    def initialize_parameter(self):
+    def initialize_PSD(self):
         power_observation_FT = (self.xp.abs(self.X_FTM).astype(self.xp.float) ** 2).mean(axis=2)
         shape = 2
         self.W_NFK = self.xp.random.gamma(shape, 1 / self.NUM_freq / shape, size=[self.NUM_source, self.NUM_freq, self.NUM_basis])
@@ -145,7 +145,7 @@ class ILRMA:
         """
         self.NUM_iteration = NUM_iteration
         self.initialize_covarianceMatrix()
-        self.initialize_parameter()
+        self.initialize_PSD()
         self.make_filename_suffix()
 
         log_likelihood_array = []

@@ -60,7 +60,7 @@ class ILRMA_DP(ILRMA):
             self.MODE_update_Z = MODE_update_Z
 
 
-    def initialize_parameter(self):
+    def initialize_PSD(self):
         self.NUM_speech, self.NUM_noise = 1, self.NUM_mic-1
         power_observation_FT = (self.xp.abs(self.X_FTM).astype(self.xp.float) ** 2).mean(axis=2)
         self.u_F = self.xp.ones(self.NUM_freq) / self.NUM_freq
