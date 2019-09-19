@@ -34,7 +34,7 @@ class MNMF_DP(FCA):
                 the number of bases of each noise source
             xp : numpy or cupy
             MODE_initialize_covarianceMatrix: str
-                how to initialize covariance matrix {unit, obs, cGMM}
+                how to initialize covariance matrix {unit, obs, ILRMA}
             MODE_update_parameter: str
                 'all' : update all the variables simultanesouly
                 'one_by_one' : update one by one
@@ -62,7 +62,7 @@ class MNMF_DP(FCA):
             NUM_noise: int
                 the number of sources
             MODE_initialize_covarianceMatrix: str
-                how to initialize covariance matrix {unit, obs, cGMM}
+                how to initialize covariance matrix {unit, obs, ILRMA}
             MODE_update_parameter: str
                 'all' : update all the variables simultanesouly
                 'Z' : update variables other than Z and then update Z
@@ -381,7 +381,7 @@ if __name__ == "__main__":
     parser.add_argument(     '--NUM_Z_iteration', type= int, default=    30, help='number of update Z iteration')
     parser.add_argument(     '--NUM_basis_noise', type= int, default=    64, help='number of basis of noise (MODE_noise=NMF)')
     parser.add_argument('--MODE_update_parameter', type= str, default= "all", help='all, one_by_one')
-    parser.add_argument('--MODE_initialize_covarianceMatrix', type=  str, default="obs", help='cGMM, unit, obs')
+    parser.add_argument('--MODE_initialize_covarianceMatrix', type=  str, default="obs", help='unit, obs, ILRMA')
     args = parser.parse_args()
 
 

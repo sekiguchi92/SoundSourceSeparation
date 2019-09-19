@@ -33,7 +33,7 @@ class FastMNMF(FastFCA):
             NUM_basis: int
                 the number of bases of each source
             MODE_initialize_covarianceMatrix: str
-                how to initialize covariance matrix {unit, obs, cGMM, cGMM2(only speech)}
+                how to initialize covariance matrix {unit, obs, ILRMA}
         """
         super(FastMNMF, self).__init__(NUM_source=NUM_source, xp=xp, MODE_initialize_covarianceMatrix=MODE_initialize_covarianceMatrix)
         self.NUM_basis = NUM_basis
@@ -49,7 +49,7 @@ class FastMNMF(FastFCA):
             NUM_iteration: int
             NUM_basis: int
             MODE_initialize_covarianceMatrix: str
-                how to initialize covariance matrix {unit, obs, cGMM}
+                how to initialize covariance matrix {unit, obs, ILRMA}
         """
         super(FastMNMF, self).set_parameter(NUM_source=NUM_source, MODE_initialize_covarianceMatrix=MODE_initialize_covarianceMatrix)
         if NUM_basis != None:
@@ -144,7 +144,7 @@ if __name__ == "__main__":
     parser.add_argument(      '--NUM_source', type= int, default=    2, help='number of noise')
     parser.add_argument(   '--NUM_iteration', type= int, default=  100, help='number of iteration')
     parser.add_argument(       '--NUM_basis', type= int, default=    8, help='number of basis')
-    parser.add_argument( '--MODE_initialize_covarianceMatrix', type=  str, default="obs", help='cGMM, cGMM2, unit, obs')
+    parser.add_argument( '--MODE_initialize_covarianceMatrix', type=  str, default="obs", help='unit, obs, ILRMA')
     args = parser.parse_args()
 
     if args.gpu < 0:

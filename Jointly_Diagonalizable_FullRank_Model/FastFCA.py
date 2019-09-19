@@ -36,7 +36,7 @@ class FastFCA():
             NUM_source: int
                 the number of sources
             MODE_initialize_covarianceMatrix: str
-                how to initialize covariance matrix {unit, obs, cGMM}
+                how to initialize covariance matrix {unit, obs, ILRMA}
         """
         self.NUM_source = NUM_source
         self.MODE_initialize_covarianceMatrix = MODE_initialize_covarianceMatrix
@@ -69,7 +69,7 @@ class FastFCA():
             NUM_source: int
                 the number of sources
             MODE_initialize_covarianceMatrix: str
-                how to initialize covariance matrix {unit, obs, cGMM}
+                how to initialize covariance matrix {unit, obs, ILRMA}
         """
         if NUM_source != None:
             self.NUM_source = NUM_source
@@ -96,27 +96,30 @@ class FastFCA():
 
 
     def initialize_covarianceMatrix(self):
-        covarianceMatrix_NFMM = self.xp.zeros([self.NUM_source, self.NUM_freq, self.NUM_mic, self.NUM_mic], dtype=self.xp.complex)
-        covarianceMatrix_NFMM[:, :] = self.xp.eye(self.NUM_mic).astype(self.xp.complex)
         if "unit" in self.MODE_initialize_covarianceMatrix:
-            pass
+            self.diagonalizer_FMM = self.xp.tile(self.xp.eye(self.NUM_mic), [self.NUM_freq, 1, 1]).astype(self.xp.complex)
+            self.covarianceDiag_NFM = self.xp.ones([self.NUM_source, self.NUM_freq, self.NUM_mic], dtype=self.xp.float) / self.NUM_mic
         elif "obs" in self.MODE_initialize_covarianceMatrix:
-            power_observation_FT = (self.xp.abs(self.X_FTM).astype(self.xp.float) ** 2).mean(axis=2) # F T
-            covarianceMatrix_NFMM[0] = self.XX_FTMM.sum(axis=1) / power_observation_FT.sum(axis=1)[:, None, None] # F M M
+            mixture_covarianceMatrix_FMM = self.XX_FTMM.sum(axis=1) / (self.xp.trace(self.XX_FTMM, axis1=2, axis2=3).sum(axis=1))[:, None, None]
+            eig_val, eig_vec = np.linalg.eigh(self.convert_to_NumpyArray(mixture_covarianceMatrix_FMM))
+            self.diagonalizer_FMM = self.xp.asarray(eig_vec).transpose(0, 2, 1).conj()
+            self.covarianceDiag_NFM = self.xp.ones([self.NUM_source, self.NUM_freq, self.NUM_mic], dtype=self.xp.float) / self.NUM_mic
+            self.covarianceDiag_NFM[0] = self.xp.asarray(eig_val)
+        elif "ILRMA" in self.MODE_initialize_covarianceMatrix:
+            sys.path.append("../Rank1_Model")
+            from ILRMA import ILRMA
+            ilrma = ILRMA(NUM_basis=2, MODE_initialize_covarianceMatrix="unit", xp=self.xp)
+            ilrma.load_spectrogram(self.X_FTM)
+            ilrma.solve(NUM_iteration=15, save_likelihood=False, save_wav=False, save_path="./", interval_save_parameter=1000)
+            separated_spec_power = self.xp.abs(ilrma.separated_spec).mean(axis=(1, 2))
+            self.diagonalizer_FMM = ilrma.SeparationMatrix_FMM
+            self.covarianceDiag_NFM = self.xp.ones([self.NUM_source, self.NUM_freq, self.NUM_mic], dtype=self.xp.float) * 0.1
+            self.covarianceDiag_NFM[0, :, separated_spec_power.argmax()] = 1
         else:
             print("Please specify how to initialize covariance matrix {unit, obs}")
             raise ValueError
 
-        covarianceMatrix_NFMM = covarianceMatrix_NFMM / self.xp.trace(covarianceMatrix_NFMM, axis1=2 ,axis2=3)[:, :, None, None]
-        H_FMM = self.convert_to_NumpyArray(self.calculateInverseMatrix(covarianceMatrix_NFMM[1] @ covarianceMatrix_NFMM[0]))
-        eig_val, eig_vec = np.linalg.eig(H_FMM)
-        self.covarianceDiag_NFM = self.xp.ones([self.NUM_source, self.NUM_freq, self.NUM_mic], dtype=self.xp.float) / self.NUM_mic
-        self.diagonalizer_FMM = self.xp.asarray(eig_vec.transpose(0, 2, 1).conj())
-        for f in range(self.NUM_freq):
-            for n in range(self.NUM_source):
-                self.covarianceDiag_NFM[n, f] = self.xp.asarray(self.xp.diag(self.diagonalizer_FMM[f] @ covarianceMatrix_NFMM[n, f] @ self.diagonalizer_FMM[f].T.conj()).real)
         self.normalize()
-        self.reset_variable()
 
 
     def reset_variable(self):
@@ -298,7 +301,7 @@ if __name__ == "__main__":
     parser.add_argument(      '--NUM_source', type=  int, default=    2, help='number of noise')
     parser.add_argument(   '--NUM_iteration', type=  int, default=  100, help='number of iteration')
     parser.add_argument(       '--NUM_basis', type=  int, default=    8, help='number of basis')
-    parser.add_argument( '--MODE_initialize_covarianceMatrix', type=  str, default="obs", help='unit, obs')
+    parser.add_argument( '--MODE_initialize_covarianceMatrix', type=  str, default="obs", help='unit, obs, ILRMA')
     args = parser.parse_args()
 
     if args.gpu < 0:

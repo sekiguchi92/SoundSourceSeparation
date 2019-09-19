@@ -26,7 +26,7 @@ class MNMF(FCA):
                 the number of bases of each source
             xp : numpy or cupy
             MODE_initialize_covarianceMatrix: str
-                how to initialize covariance matrix {unit, obs, cGMM}
+                how to initialize covariance matrix {unit, obs, ILRMA}
             MODE_update_parameter: str
                 'all' : update all the parameters simultanesouly to reduce computational cost
                 'one_by_one' : update the parameters one by one to monotonically increase log-likelihood
@@ -44,7 +44,7 @@ class MNMF(FCA):
             NUM_source: int
                 the number of sources
             MODE_initialize_covarianceMatrix: str
-                how to initialize covariance matrix {unit, obs, cGMM}
+                how to initialize covariance matrix {unit, obs, ILRMA}
             MODE_update_parameter: str
                 'all' : update all the variables simultanesouly
                 'one_by_one' : update one by one
@@ -163,7 +163,7 @@ if __name__ == "__main__":
     parser.add_argument(          '--NUM_source', type= int, default=     2, help='number of noise')
     parser.add_argument(       '--NUM_iteration', type= int, default=    30, help='number of iteration')
     parser.add_argument('--MODE_update_parameter', type= str, default= "all", help='all, one_by_one')
-    parser.add_argument('--MODE_initialize_covarianceMatrix', type= str, default= "obs", help='cGMM, unit, obs')
+    parser.add_argument('--MODE_initialize_covarianceMatrix', type= str, default= "obs", help='unit, obs, ILRMA')
     args = parser.parse_args()
 
     if args.gpu < 0:

@@ -47,7 +47,7 @@ class FCA:
                 the number of iteration to update all variables
             xp : numpy or cupy
             MODE_initialize_covarianceMatrix: str
-                how to initialize covariance matrix {unit, obs, cGMM}
+                how to initialize covariance matrix {unit, obs, ILRMA}
             MODE_update_parameter: str
                 'all' : update all the parameters simultanesouly to reduce computational cost
                 'one_by_one' : update the parameters one by one to monotonically increase log-likelihood
@@ -84,7 +84,7 @@ class FCA:
             NUM_source: int
                 the number of sources
             MODE_initialize_covarianceMatrix: str
-                how to initialize covariance matrix {unit, obs, cGMM}
+                how to initialize covariance matrix {unit, obs, ILRMA}
             MODE_update_parameter: str
                 'all' : update all the variables simultanesouly
                 'one_by_one' : update one by one
@@ -117,9 +117,19 @@ class FCA:
         self.covarianceMatrix_NFMM[:, :] = self.xp.eye(self.NUM_mic).astype(self.xp.complex)
         if "unit" in self.MODE_initialize_covarianceMatrix:
             pass
-        elif "obs" in self.MODE_initialize_covarianceMatrix:
+        elif "obs" in self.MODE_initialize_covarianceMatrix: # Mainly For speech enhancement
             power_observation_FT = (self.xp.abs(self.X_FTM).astype(self.xp.float) ** 2).mean(axis=2) # F T
             self.covarianceMatrix_NFMM[0] = self.XX_FTMM.sum(axis=1) / power_observation_FT.sum(axis=1)[:, None, None] # F M M
+        elif "ILRMA" in self.MODE_initialize_covarianceMatrix: # Mainly for source separation
+            sys.path.append("../Rank1_Model")
+            from ILRMA import ILRMA
+            ilrma = ILRMA(NUM_basis=2, MODE_initialize_covarianceMatrix="unit", xp=self.xp)
+            ilrma.load_spectrogram(self.X_FTM)
+            ilrma.solve(NUM_iteration=15, save_likelihood=False, save_wav=False, save_path="./", interval_save_parameter=1000)
+            MixingMatrix_FMM = self.calculateInverseMatrix(ilrma.SeparationMatrix_FMM)
+            separated_spec_power = self.xp.abs(ilrma.separated_spec).mean(axis=(1, 2))
+            # separated_spec_power = self.xp.abs(ilrma.separated_spec[:, 400:2000]).max(axis=2).mean(axis=1) # For speech enhancement
+            self.covarianceMatrix_NFMM[0] = MixingMatrix_FMM[:, :, separated_spec_power.argmax()][:, :, None] @ MixingMatrix_FMM[:, :, separated_spec_power.argmax()][:, None].conj() + 1e-6 * self.xp.eye(self.NUM_mic)[None]
 
         self.covarianceMatrix_NFMM = self.covarianceMatrix_NFMM / self.xp.trace(self.covarianceMatrix_NFMM, axis1=2 ,axis2=3)[:, :, None, None]
 
@@ -289,7 +299,7 @@ if __name__ == "__main__":
     parser.add_argument(                      '--NUM_source', type= int, default=     2, help='number of noise')
     parser.add_argument(                   '--NUM_iteration', type= int, default=    30, help='number of iteration')
     parser.add_argument(            '--MODE_update_parameter', type= str, default= "all", help='all, one_by_one')
-    parser.add_argument('--MODE_initialize_covarianceMatrix', type= str, default= "obs", help='cGMM, unit, obs')
+    parser.add_argument('--MODE_initialize_covarianceMatrix', type= str, default= "obs", help='unit, obs, ILRMA')
     args = parser.parse_args()
 
     if args.gpu < 0:

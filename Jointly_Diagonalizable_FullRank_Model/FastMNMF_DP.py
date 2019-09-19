@@ -32,7 +32,7 @@ class FastMNMF_DP(FastFCA):
             NUM_basis_noise: int
                 the number of bases of each noise source
             MODE_initialize_covarianceMatrix: str
-                how to initialize covariance matrix {unit, obs, cGMM, cGMM2(only speech)}
+                how to initialize covariance matrix {unit, obs, ILRMA}
             MODE_update_Z: str
                 how to update latent variable Z {sampling, backprop}
         """
@@ -61,7 +61,7 @@ class FastMNMF_DP(FastFCA):
             NUM_basis_noise: int
                 the number of basis of noise sources
             MODE_initialize_covarianceMatrix: str
-                how to initialize covariance matrix {unit, obs, cGMM}
+                how to initialize covariance matrix {unit, obs, ILRMA}
             MODE_update_Z: str
                 how to update latent variable Z {sampling, backprop}
         """
@@ -270,7 +270,7 @@ if __name__ == "__main__":
     parser.add_argument( '--NUM_Z_iteration', type= int, default=   30, help='number of update Z iteration')
     parser.add_argument( '--NUM_basis_noise', type= int, default=   64, help='number of basis of noise (MODE_noise=NMF)')
     parser.add_argument(   '--MODE_update_Z', type= str, default="sampling", help='sampling, sampling2, backprop, backprop2, hybrid, hybrid2')
-    parser.add_argument( '--MODE_initialize_covarianceMatrix', type=  str, default="obs", help='unit, obs')
+    parser.add_argument( '--MODE_initialize_covarianceMatrix', type=  str, default="obs", help='unit, obs, ILRMA')
     args = parser.parse_args()
 
     if args.gpu < 0:
