@@ -322,5 +322,5 @@ if __name__ == "__main__":
 
     separater = FastFCA(NUM_source=args.NUM_source, xp=xp, MODE_initialize_covarianceMatrix=args.MODE_initialize_covarianceMatrix)
     separater.load_spectrogram(spec)
-    separater.file_id = file_id
+    separater.file_id = args.file_id
     separater.solve(NUM_iteration=args.NUM_iteration, save_likelihood=False, save_parameter=False, save_wav=False, save_path="./", interval_save_parameter=25)
