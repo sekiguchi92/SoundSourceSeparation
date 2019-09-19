@@ -36,7 +36,7 @@ class ILRMA:
             NUM_basis: int
                 the number of bases of each speech source
             MODE_initialize_covarianceMatrix: str
-                how to initialize covariance matrix {unit, obs, cGMM}
+                how to initialize covariance matrix {unit, obs}
             xp: numpy or cupy
         """
         self.NUM_basis = NUM_basis
@@ -70,7 +70,7 @@ class ILRMA:
             NUM_basis: int
                 the number of basis
             MODE_initialize_covarianceMatrix: str
-                how to initialize covariance matrix {unit, obs, cGMM, obs_all}
+                how to initialize covariance matrix {unit, obs}
         """
         if NUM_iteration != None:
             self.NUM_iteration = NUM_iteration
@@ -109,7 +109,7 @@ class ILRMA:
 
     def initialize_covarianceMatrix(self):
         if "unit" in self.MODE_initialize_covarianceMatrix:
-            mixing_matrix_FMM = self.SeparationMatrix_FMM
+            mixing_matrix_FMM = self.xp.tile(self.xp.eye(self.NUM_mic), [self.NUM_freq, 1, 1]).astype(self.xp.complex)
         elif "obs" in self.MODE_initialize_covarianceMatrix:
             power_observation = (self.xp.abs(self.X_FTM).astype(self.xp.float32) ** 2).mean(axis=2) # F T
 
@@ -121,12 +121,7 @@ class ILRMA:
                 mixing_matrix_FMM[f, :, 0] = eig_vector[f, :, eig_val[f].argmax()]
 
         self.SeparationMatrix_FMM = self.calculateInverseMatrix(mixing_matrix_FMM)
-
-        mu_NF = self.xp.zeros([self.NUM_mic, self.NUM_freq])
-        for m in range(self.NUM_mic):
-            mu_NF[m] = (self.SeparationMatrix_FMM[:, m] * self.SeparationMatrix_FMM[:, m].conj()).sum(axis=1).real
-            self.SeparationMatrix_FMM[:, m] = self.SeparationMatrix_FMM[:, m] / self.xp.sqrt(mu_NF[m, :, None])
-        self.reset_variable()
+        self.normalize()
 
 
     def solve(self, NUM_iteration=100, save_likelihood=False, save_parameter=False, save_wav=False, save_path="./", interval_save_parameter=25):
@@ -144,8 +139,8 @@ class ILRMA:
                 interval of saving parameter
         """
         self.NUM_iteration = NUM_iteration
-        self.initialize_covarianceMatrix()
         self.initialize_PSD()
+        self.initialize_covarianceMatrix()
         self.make_filename_suffix()
 
         log_likelihood_array = []
@@ -280,29 +275,26 @@ class ILRMA:
             separated_spec: numpy.ndarray
                 If source_index is None, shape is N x F x T, and else F x T
         """
-
-        self.Y_FTN = self.convert_to_NumpyArray(self.xp.matmul( self.SeparationMatrix_FMM[:, None], self.X_FTM[:, :, :, None] )[:, :, :, 0]) # F * T * N
-        F, T, N = self.Y_FTN.shape
+        self.Y_FTN = ( self.SeparationMatrix_FMM[:, None] @ self.X_FTM[:, :, :, None] ).squeeze()
         if source_index == None:
-            self.separated_spec = np.zeros([F, T, N], dtype=np.complex)
-            for n in range(N):
-                self.separated_spec[:, :, n] = np.matmul( self.Y_FTN[:, :, n][:, :, None], np.linalg.inv(self.convert_to_NumpyArray( self.SeparationMatrix_FMM))[:, :, n][:, None] )[:, :, mic_index]
-            self.separated_spec = self.separated_spec.transpose(2, 0, 1)
+            self.separated_spec = self.xp.zeros([self.NUM_mic, self.NUM_freq, self.NUM_time], dtype=self.xp.complex)
+            for n in range(self.NUM_mic):
+                self.separated_spec[n] = self.Y_FTN[:, :, n] * self.calculateInverseMatrix(self.SeparationMatrix_FMM)[:, None, mic_index, n]
         else:
-            self.separated_spec = np.matmul( self.Y_FTN[:, :, source_index][:, :, None], np.linalg.inv(self.convert_to_NumpyArray( self.SeparationMatrix_FMM))[:, :, source_index][:, None] )[:, :, mic_index]
+            self.separated_spec = self.Y_FTN[:, :, source_index] @ self.calculateInverseMatrix(self.SeparationMatrix_FMM)[:, None, mic_index, source_index]
         return self.separated_spec # N F T or F T
 
 
     def save_separated_signal(self, save_fileName="sample.wav"):
-        self.separated_spec = self.convert_to_NumpyArray(self.separated_spec)
+        separated_spec = self.convert_to_NumpyArray(self.separated_spec)
         hop_length = int((self.NUM_freq - 1) / 2)
-        if self.separated_spec.ndim == 2:
-            separated_signal = librosa.core.istft(self.separated_spec, hop_length=hop_length)
+        if separated_spec.ndim == 2:
+            separated_signal = librosa.core.istft(separated_spec, hop_length=hop_length)
             separated_signal /= np.abs(separated_signal).max() * 1.2
             sf.write(save_fileName, separated_signal, 16000)
-        elif self.separated_spec.ndim == 3:
+        elif separated_spec.ndim == 3:
             for n in range(self.NUM_source):
-                tmp = librosa.core.istft(self.separated_spec[n, :, :], hop_length=hop_length)
+                tmp = librosa.core.istft(separated_spec[n, :, :], hop_length=hop_length)
                 if n == 0:
                     separated_signal = np.zeros([self.NUM_source, len(tmp)])
                 separated_signal[n] = tmp
@@ -343,7 +335,7 @@ if __name__ == "__main__":
     parser.add_argument(        '--n_fft', type= int, default=  1024, help='number of frequencies')
     parser.add_argument(    '--NUM_basis', type= int, default=     4, help='number of basis of noise (MODE_noise=NMF)')
     parser.add_argument('--NUM_iteration', type= int, default=    30, help='number of iteration')
-    parser.add_argument( '--MODE_initialize_covarianceMatrix', type=str, default="obs2", help='cGMM, cGMM2, unit, obs')
+    parser.add_argument( '--MODE_initialize_covarianceMatrix', type=str, default="obs", help='unit, obs')
     args = parser.parse_args()
 
     if args.gpu < 0:
