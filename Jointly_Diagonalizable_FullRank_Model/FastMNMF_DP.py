@@ -148,7 +148,7 @@ class FastMNMF_DP(FastFCA):
         nu_NnK = self.W_noise_NnFK.sum(axis=1)
         self.W_noise_NnFK = self.W_noise_NnFK / nu_NnK[:, None]
         self.H_noise_NnKT = self.H_noise_NnKT * nu_NnK[:, :, None]
-        self.lambda_NFT[1:] = self.W_noise_NnFK @ self.H_noise_NnKT
+        self.lambda_NFT[1:] = self.W_noise_NnFK @ self.H_noise_NnKT + EPS
 
         self.reset_variable()
 
@@ -163,7 +163,7 @@ class FastMNMF_DP(FastFCA):
         self.W_noise_NnFK = self.W_noise_NnFK * self.xp.sqrt(a_W / b_W)
         self.H_noise_NnKT = self.H_noise_NnKT * self.xp.sqrt(a_H / b_H)
 
-        self.lambda_NFT[1:] = self.W_noise_NnFK @ self.H_noise_NnKT
+        self.lambda_NFT[1:] = self.W_noise_NnFK @ self.H_noise_NnKT + EPS
         self.Y_FTM = (self.lambda_NFT[..., None] * self.covarianceDiag_NFM[:, :, None]).sum(axis=0)
 
 

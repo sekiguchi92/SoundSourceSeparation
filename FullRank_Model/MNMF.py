@@ -76,8 +76,6 @@ class MNMF(FCA):
 
         if hasattr(self, "file_id"):
            self.filename_suffix += "-ID={}".format(self.file_id)
-        else:
-            print("====================\n\nWarning: Please set self.file_id\n\n====================")
 
 
     def update(self):
@@ -110,14 +108,14 @@ class MNMF(FCA):
         a_1 = (self.H_NKT.transpose(0, 2, 1)[:, None] * self.tr_Cov_Yinv_X_Yinv_NFT[:, :, :, None]).sum(axis=2) # Nn F K
         b_1 = (self.H_NKT.transpose(0, 2, 1)[:, None] * self.tr_Cov_Yinv_NFT[:, :, :, None]).sum(axis=2) # Nn F K
         self.W_NFK = self.W_NFK * self.xp.sqrt(a_1 / b_1)
-        self.lambda_NFT = self.W_NFK @ self.H_NKT
+        self.lambda_NFT = self.W_NFK @ self.H_NKT + EPS
 
 
     def update_H(self):
         a_1 = (self.W_NFK[..., None] * self.tr_Cov_Yinv_X_Yinv_NFT[:, :, None]).sum(axis=1) # Nn K T
         b_1 = (self.W_NFK[..., None] * self.tr_Cov_Yinv_NFT[:, :, None]).sum(axis=1) # Nn K T
         self.H_NKT = self.H_NKT * self.xp.sqrt(a_1 / b_1)
-        self.lambda_NFT = self.W_NFK @ self.H_NKT
+        self.lambda_NFT = self.W_NFK @ self.H_NKT + EPS
 
 
     def normalize(self):
@@ -129,7 +127,7 @@ class MNMF(FCA):
         self.W_NFK = self.W_NFK / nu_NK[:, None]
         self.H_NKT = self.H_NKT * nu_NK[:, :, None]
 
-        self.lambda_NFT = self.W_NFK @ self.H_NKT
+        self.lambda_NFT = self.W_NFK @ self.H_NKT + EPS
 
 
     def save_parameter(self, filename):
@@ -185,4 +183,4 @@ if __name__ == "__main__":
     separater = MNMF(NUM_source=args.NUM_source, NUM_basis=args.NUM_basis, xp=xp, MODE_initialize_covarianceMatrix=args.MODE_initialize_covarianceMatrix, MODE_update_parameter=args.MODE_update_parameter)
     separater.load_spectrogram(spec)
     separater.file_id = args.file_id
-    separater.solve(NUM_iteration=args.NUM_iteration, save_likelihood=False, save_parameter=False, save_path="./", interval_save_parameter=100)
+    separater.solve(NUM_iteration=args.NUM_iteration, save_likelihood=False, save_parameter=False, save_wav=True, save_path="./", interval_save_parameter=100)

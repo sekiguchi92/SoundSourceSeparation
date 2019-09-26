@@ -239,7 +239,7 @@ class MNMF_DP(FCA):
             a_1 = (self.W_noise_NnFK[..., None] * self.tr_Cov_Yinv_X_Yinv_NFT[1:, :, None]).sum(axis=1) # Nn K T
             b_1 = (self.W_noise_NnFK[..., None] * self.tr_Cov_Yinv_NFT[1:, :, None]).sum(axis=1) # Nn K T
             self.H_noise_NnKT = self.H_noise_NnKT * self.xp.sqrt(a_1 / b_1)
-        self.lambda_NFT[1:] = self.W_noise_NnFK @ self.H_noise_NnKT
+        self.lambda_NFT[1:] = self.W_noise_NnFK @ self.H_noise_NnKT + EPS
 
 
     def update_W_noise(self):
@@ -252,7 +252,7 @@ class MNMF_DP(FCA):
             a_1 = (self.H_noise_NnKT.transpose(0, 2, 1)[:, None] * self.tr_Cov_Yinv_X_Yinv_NFT[1:, :, :, None]).sum(axis=2) # Nn F K
             b_1 = (self.H_noise_NnKT.transpose(0, 2, 1)[:, None] * self.tr_Cov_Yinv_NFT[1:, :, :, None]).sum(axis=2) # Nn F K
             self.W_noise_NnFK = self.W_noise_NnFK * self.xp.sqrt(a_1 / b_1)
-        self.lambda_NFT[1:] = self.W_noise_NnFK @ self.H_noise_NnKT
+        self.lambda_NFT[1:] = self.W_noise_NnFK @ self.H_noise_NnKT + EPS
 
 
     def normalize(self):
@@ -270,7 +270,7 @@ class MNMF_DP(FCA):
         self.H_noise_NnKT = self.H_noise_NnKT * nu_NnK[:, :, None]
 
         self.lambda_NFT[0] = self.u_F[:, None] * self.v_T[None] * self.power_speech_FT
-        self.lambda_NFT[1:] = self.W_noise_NnFK @ self.H_noise_NnKT
+        self.lambda_NFT[1:] = self.W_noise_NnFK @ self.H_noise_NnKT + EPS
 
 
     def loss_func_Z(self, z, vae, n):

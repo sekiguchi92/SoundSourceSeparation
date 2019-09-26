@@ -189,9 +189,6 @@ class FCA:
 
         if hasattr(self, "file_id"):
            self.filename_suffix += "-ID={}".format(self.file_id)
-        else:
-            print("====================\n\nWarning: Please set self.file_id\n\n====================")
-        return self.filename_suffix
 
 
     def update(self):
@@ -217,7 +214,7 @@ class FCA:
 
 
     def update_lambda(self):
-        self.lambda_NFT = self.lambda_NFT * self.xp.sqrt(self.tr_Cov_Yinv_X_Yinv_NFT / self.tr_Cov_Yinv_NFT)
+        self.lambda_NFT = self.lambda_NFT * self.xp.sqrt(self.tr_Cov_Yinv_X_Yinv_NFT / self.tr_Cov_Yinv_NFT) + EPS
 
 
     def update_covarianceMatrix(self):
@@ -225,6 +222,7 @@ class FCA:
         b_1 = self.covarianceMatrix_NFMM @ (self.lambda_NFT[..., None, None] * self.Yinv_X_Yinv_FTMM[None]).sum(axis=2) @ self.covarianceMatrix_NFMM + (self.xp.eye(self.NUM_mic) * EPS)[None, None] # N F M M
         self.covarianceMatrix_NFMM = geometric_mean_invA(a_1, b_1, xp=self.xp)
         self.covarianceMatrix_NFMM = (self.covarianceMatrix_NFMM + self.covarianceMatrix_NFMM.transpose(0, 1, 3, 2).conj()) / 2 # for stability
+
 
     def normalize(self):
         mu_NF = self.xp.trace(self.covarianceMatrix_NFMM, axis1=2, axis2=3).real

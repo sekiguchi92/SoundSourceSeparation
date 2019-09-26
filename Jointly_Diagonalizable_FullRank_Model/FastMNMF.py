@@ -93,7 +93,7 @@ class FastMNMF(FastFCA):
         self.W_NFK = self.W_NFK * self.xp.sqrt(a_W / b_W)
         self.H_NKT = self.H_NKT * self.xp.sqrt(a_H / b_H)
 
-        self.lambda_NFT = self.W_NFK @ self.H_NKT
+        self.lambda_NFT = self.W_NFK @ self.H_NKT + EPS
         self.Y_FTM = (self.lambda_NFT[..., None] * self.covarianceDiag_NFM[:, :, None]).sum(axis=0)
 
 
@@ -109,7 +109,7 @@ class FastMNMF(FastFCA):
         nu_NK = self.W_NFK.sum(axis=1)
         self.W_NFK = self.W_NFK / nu_NK[:, None]
         self.H_NKT = self.H_NKT * nu_NK[:, :, None]
-        self.lambda_NFT = self.W_NFK @ self.H_NKT
+        self.lambda_NFT = self.W_NFK @ self.H_NKT + EPS
 
         self.reset_variable()
 

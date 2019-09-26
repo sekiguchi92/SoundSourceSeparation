@@ -212,7 +212,7 @@ class FastFCA():
     def update_lambda(self):
         a = (self.covarianceDiag_NFM[:, :, None] * (self.Qx_power_FTM / (self.Y_FTM ** 2))[None]).sum(axis=3) # N F T
         b = (self.covarianceDiag_NFM[:, :, None] / self.Y_FTM[None]).sum(axis=3)
-        self.lambda_NFT = self.lambda_NFT * self.xp.sqrt(a / b)
+        self.lambda_NFT = self.lambda_NFT * self.xp.sqrt(a / b) + EPS
         self.Y_FTM = (self.lambda_NFT[..., None] * self.covarianceDiag_NFM[:, :, None]).sum(axis=0)
 
 
@@ -223,7 +223,7 @@ class FastFCA():
 
         mu_NF = (self.covarianceDiag_NFM).sum(axis=2).real
         self.covarianceDiag_NFM = self.covarianceDiag_NFM / mu_NF[:, :, None]
-        self.lambda_NFT = self.lambda_NFT * mu_NF[:, :, None]
+        self.lambda_NFT = self.lambda_NFT * mu_NF[:, :, None] + EPS
 
         self.reset_variable()
 
