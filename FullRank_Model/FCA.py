@@ -35,26 +35,32 @@ from configure import *
 
 
 class FCA:
+    """ Blind Source Separation Using Fast Full-rank Covariance Analysis (FastFCA)
 
-    def __init__(self, NUM_source=2, xp=np, MODE_initialize_covarianceMatrix="unit", MODE_update_parameter=["all", "one_by_one"][0]):
+    X_FTM: the observed complex spectrogram
+    covarianceMatrix_NFMM: spatial covariance matrices (SCMs) for each source
+    lambda_NFT: power spectral densities of each source
+    """
+
+    def __init__(self, n_source=2, xp=np, init_SCM="unit", mode_update_parameter=["all", "one_by_one"][0]):
         """ initialize FCA
 
         Parameters:
         -----------
-            NUM_source: int
+            n_source: int
                 the number of sources
-            NUM_iteration: int
+            n_iteration: int
                 the number of iteration to update all variables
             xp : numpy or cupy
-            MODE_initialize_covarianceMatrix: str
+            init_SCM: str
                 how to initialize covariance matrix {unit, obs, ILRMA}
-            MODE_update_parameter: str
+            mode_update_parameter: str
                 'all' : update all the parameters simultanesouly to reduce computational cost
                 'one_by_one' : update the parameters one by one to monotonically increase log-likelihood
         """
-        self.NUM_source = NUM_source
-        self.MODE_initialize_covarianceMatrix = MODE_initialize_covarianceMatrix
-        self.MODE_update_parameter = MODE_update_parameter
+        self.n_source = n_source
+        self.init_SCM = init_SCM
+        self.mode_update_parameter = mode_update_parameter
         self.xp = xp
         self.calculateInverseMatrix = self.return_InverseMatrixCalculationMethod()
         self.method_name = "FCA"
@@ -76,27 +82,27 @@ class FCA:
             return lambda x: cuda.to_gpu(np.linalg.inv(convert_to_NumpyArray(x)))
 
 
-    def set_parameter(self, NUM_iteration=None, NUM_source=None, MODE_initialize_covarianceMatrix=None, MODE_update_parameter=None):
+    def set_parameter(self, n_iteration=None, n_source=None, init_SCM=None, mode_update_parameter=None):
         """ set parameters
 
         Parameters:
         -----------
-            NUM_source: int
+            n_source: int
                 the number of sources
-            MODE_initialize_covarianceMatrix: str
+            init_SCM: str
                 how to initialize covariance matrix {unit, obs, ILRMA}
-            MODE_update_parameter: str
+            mode_update_parameter: str
                 'all' : update all the variables simultanesouly
                 'one_by_one' : update one by one
         """
-        if NUM_iteration != None:
-            self.NUM_iteration = NUM_iteration
-        if NUM_source != None:
-            self.NUM_source = NUM_source
-        if MODE_initialize_covarianceMatrix != None:
-            self.MODE_initialize_covarianceMatrix = MODE_initialize_covarianceMatrix
-        if MODE_update_parameter != None:
-            self.MODE_update_parameter = MODE_update_parameter
+        if n_iteration != None:
+            self.n_iteration = n_iteration
+        if n_source != None:
+            self.n_source = n_source
+        if init_SCM != None:
+            self.init_SCM = init_SCM
+        if mode_update_parameter != None:
+            self.mode_update_parameter = mode_update_parameter
 
 
     def load_spectrogram(self, X_FTM):
@@ -107,39 +113,39 @@ class FCA:
             X_FTM: self.xp.array [ F * T * M ]
                 power spectrogram of observed signals
         """
-        self.NUM_freq, self.NUM_time, self.NUM_mic = X_FTM.shape
+        self.n_freq, self.n_time, self.n_mic = X_FTM.shape
         self.X_FTM = self.xp.asarray(X_FTM, dtype=self.xp.complex)
         self.XX_FTMM = self.xp.matmul( self.X_FTM[:, :, :, None], self.xp.conj( self.X_FTM[:, :, None, :] ) ) # F T M M
 
 
     def initialize_covarianceMatrix(self):
-        self.covarianceMatrix_NFMM = self.xp.zeros([self.NUM_source, self.NUM_freq, self.NUM_mic, self.NUM_mic], dtype=self.xp.complex)
-        self.covarianceMatrix_NFMM[:, :] = self.xp.eye(self.NUM_mic).astype(self.xp.complex)
-        if "unit" in self.MODE_initialize_covarianceMatrix:
+        self.covarianceMatrix_NFMM = self.xp.zeros([self.n_source, self.n_freq, self.n_mic, self.n_mic], dtype=self.xp.complex)
+        self.covarianceMatrix_NFMM[:, :] = self.xp.eye(self.n_mic).astype(self.xp.complex)
+        if "unit" in self.init_SCM:
             pass
-        elif "obs" in self.MODE_initialize_covarianceMatrix: # Mainly For speech enhancement
+        elif "obs" in self.init_SCM: # Mainly For speech enhancement
             power_observation_FT = (self.xp.abs(self.X_FTM).astype(self.xp.float) ** 2).mean(axis=2) # F T
             self.covarianceMatrix_NFMM[0] = self.XX_FTMM.sum(axis=1) / power_observation_FT.sum(axis=1)[:, None, None] # F M M
-        elif "ILRMA" in self.MODE_initialize_covarianceMatrix: # Mainly for source separation
+        elif "ILRMA" in self.init_SCM: # Mainly for source separation
             sys.path.append("../Rank1_Model")
             from ILRMA import ILRMA
-            ilrma = ILRMA(NUM_basis=2, MODE_initialize_covarianceMatrix="unit", xp=self.xp)
+            ilrma = ILRMA(n_basis=2, init_SCM="unit", xp=self.xp)
             ilrma.load_spectrogram(self.X_FTM)
-            ilrma.solve(NUM_iteration=15, save_likelihood=False, save_wav=False, save_path="./", interval_save_parameter=1000)
+            ilrma.solve(n_iteration=15, save_likelihood=False, save_wav=False, save_path="./", interval_save_parameter=1000)
             MixingMatrix_FMM = self.calculateInverseMatrix(ilrma.SeparationMatrix_FMM)
             separated_spec_power = self.xp.abs(ilrma.separated_spec).mean(axis=(1, 2))
             # separated_spec_power = self.xp.abs(ilrma.separated_spec[:, 400:2000]).max(axis=2).mean(axis=1) # For speech enhancement
-            self.covarianceMatrix_NFMM[0] = MixingMatrix_FMM[:, :, separated_spec_power.argmax()][:, :, None] @ MixingMatrix_FMM[:, :, separated_spec_power.argmax()][:, None].conj() + 1e-6 * self.xp.eye(self.NUM_mic)[None]
+            self.covarianceMatrix_NFMM[0] = MixingMatrix_FMM[:, :, separated_spec_power.argmax()][:, :, None] @ MixingMatrix_FMM[:, :, separated_spec_power.argmax()][:, None].conj() + 1e-6 * self.xp.eye(self.n_mic)[None]
 
         self.covarianceMatrix_NFMM = self.covarianceMatrix_NFMM / self.xp.trace(self.covarianceMatrix_NFMM, axis1=2 ,axis2=3)[:, :, None, None]
 
 
     def initialize_PSD(self):
-        self.lambda_NFT = self.xp.random.random([self.NUM_source, self.NUM_freq, self.NUM_time]).astype(self.xp.float)
+        self.lambda_NFT = self.xp.random.random([self.n_source, self.n_freq, self.n_time]).astype(self.xp.float)
         self.lambda_NFT[0] = self.xp.abs(self.X_FTM.mean(axis=2)) ** 2
 
 
-    def solve(self, NUM_iteration=100, save_likelihood=False, save_parameter=False, save_wav=False, save_path="./", interval_save_parameter=30):
+    def solve(self, n_iteration=100, save_likelihood=False, save_parameter=False, save_wav=False, save_path="./", interval_save_parameter=30):
         """
         Parameters:
             save_likelihood: boolean
@@ -153,24 +159,24 @@ class FCA:
             interval_save_parameter: int
                 interval of saving parameter
         """
-        self.NUM_iteration = NUM_iteration
+        self.n_iteration = n_iteration
 
         self.initialize_covarianceMatrix()
         self.initialize_PSD()
         self.make_filename_suffix()
 
         log_likelihood_array = []
-        for it in progressbar(range(self.NUM_iteration)):
+        for it in progressbar(range(self.n_iteration)):
             self.update()
 
-            if save_parameter and (it > 0) and ((it+1) % interval_save_parameter == 0) and ((it+1) != self.NUM_iteration):
+            if save_parameter and (it > 0) and ((it+1) % interval_save_parameter == 0) and ((it+1) != self.n_iteration):
                 self.save_parameter(save_path+"{}-parameter-{}-{}.pic".format(self.method_name, self.filename_suffix, it + 1))
 
-            if save_wav and (it > 0) and ((it+1) % interval_save_parameter == 0) and ((it+1) != self.NUM_iteration):
+            if save_wav and (it > 0) and ((it+1) % interval_save_parameter == 0) and ((it+1) != self.n_iteration):
                 self.separate_WienerFilter(mic_index=MIC_INDEX)
                 self.save_separated_signal(save_path+"{}-sep-Wiener-{}-{}.wav".format(self.method_name, self.filename_suffix, it + 1))
 
-            if save_likelihood and (it > 0) and ((it+1) % interval_save_parameter == 0) and ((it+1) != self.NUM_iteration):
+            if save_likelihood and (it > 0) and ((it+1) % interval_save_parameter == 0) and ((it+1) != self.n_iteration):
                 log_likelihood_array.append(self.calculate_log_likelihood())
 
         if save_parameter:
@@ -185,19 +191,19 @@ class FCA:
 
 
     def make_filename_suffix(self):
-        self.filename_suffix = "S={}-it={}-init={}-update={}".format(self.NUM_source, self.NUM_iteration, self.MODE_initialize_covarianceMatrix, self.MODE_update_parameter)
+        self.filename_suffix = "S={}-it={}-init={}-update={}".format(self.n_source, self.n_iteration, self.init_SCM, self.mode_update_parameter)
 
         if hasattr(self, "file_id"):
            self.filename_suffix += "-ID={}".format(self.file_id)
 
 
     def update(self):
-        if self.MODE_update_parameter == "one_by_one":
+        if self.mode_update_parameter == "one_by_one":
             self.update_axiliary_variable()
             self.update_lambda()
             self.update_axiliary_variable()
             self.update_covarianceMatrix()
-        if self.MODE_update_parameter == "all":
+        if self.mode_update_parameter == "all":
             self.update_axiliary_variable()
             self.update_lambda()
             self.update_covarianceMatrix()
@@ -218,8 +224,8 @@ class FCA:
 
 
     def update_covarianceMatrix(self):
-        a_1 = (self.lambda_NFT[..., None, None] * self.Yinv_FTMM[None]).sum(axis=2)# + (self.xp.eye(self.NUM_mic) * EPS)[None, None]  # N F M M
-        b_1 = self.covarianceMatrix_NFMM @ (self.lambda_NFT[..., None, None] * self.Yinv_X_Yinv_FTMM[None]).sum(axis=2) @ self.covarianceMatrix_NFMM + (self.xp.eye(self.NUM_mic) * EPS)[None, None] # N F M M
+        a_1 = (self.lambda_NFT[..., None, None] * self.Yinv_FTMM[None]).sum(axis=2)# + (self.xp.eye(self.n_mic) * EPS)[None, None]  # N F M M
+        b_1 = self.covarianceMatrix_NFMM @ (self.lambda_NFT[..., None, None] * self.Yinv_X_Yinv_FTMM[None]).sum(axis=2) @ self.covarianceMatrix_NFMM + (self.xp.eye(self.n_mic) * EPS)[None, None] # N F M M
         self.covarianceMatrix_NFMM = geometric_mean_invA(a_1, b_1, xp=self.xp)
         self.covarianceMatrix_NFMM = (self.covarianceMatrix_NFMM + self.covarianceMatrix_NFMM.transpose(0, 1, 3, 2).conj()) / 2 # for stability
 
@@ -251,16 +257,16 @@ class FCA:
 
     def save_separated_signal(self, save_fileName="sample.wav"):
         self.separated_spec = self.convert_to_NumpyArray(self.separated_spec)
-        hop_length = int((self.NUM_freq - 1) / 2)
+        hop_length = int((self.n_freq - 1) / 2)
         if self.separated_spec.ndim == 2:
             separated_signal = librosa.core.istft(self.separated_spec, hop_length=hop_length)
             separated_signal /= np.abs(separated_signal).max() * 1.2
             sf.write(save_fileName, separated_signal, 16000)
         elif self.separated_spec.ndim == 3:
-            for n in range(self.NUM_source):
+            for n in range(self.n_source):
                 tmp = librosa.core.istft(self.separated_spec[n, :, :], hop_length=hop_length)
                 if n == 0:
-                    separated_signal = np.zeros([self.NUM_source, len(tmp)])
+                    separated_signal = np.zeros([self.n_source, len(tmp)])
                 separated_signal[n] = tmp
             separated_signal /= np.abs(separated_signal).max() * 1.2
             sf.write(save_fileName, separated_signal.T, 16000)
@@ -282,8 +288,8 @@ class FCA:
         self.covarianceMatrix_NFMM = param_list[0]
         self.lambda_NFT = param_list[1]
 
-        self.NUM_source, self.NUM_freq, self.NUM_time = self.lambda_NFT.shape
-        self.NUM_mic = self.covarianceMatrix_NFMM.shape[3]
+        self.n_source, self.n_freq, self.n_time = self.lambda_NFT.shape
+        self.n_mic = self.covarianceMatrix_NFMM.shape[3]
 
 
 if __name__ == "__main__":
@@ -294,10 +300,10 @@ if __name__ == "__main__":
     parser.add_argument(                         '--file_id', type= str, default="None", help='file id')
     parser.add_argument(                             '--gpu', type= int, default=     0, help='GPU ID')
     parser.add_argument(                           '--n_fft', type= int, default=  1024, help='number of frequencies')
-    parser.add_argument(                      '--NUM_source', type= int, default=     2, help='number of noise')
-    parser.add_argument(                   '--NUM_iteration', type= int, default=    30, help='number of iteration')
-    parser.add_argument(            '--MODE_update_parameter', type= str, default= "all", help='all, one_by_one')
-    parser.add_argument('--MODE_initialize_covarianceMatrix', type= str, default= "obs", help='unit, obs, ILRMA')
+    parser.add_argument(                      '--n_source', type= int, default=     2, help='number of noise')
+    parser.add_argument(                   '--n_iteration', type= int, default=    30, help='number of iteration')
+    parser.add_argument(            '--mode_update_parameter', type= str, default= "all", help='all, one_by_one')
+    parser.add_argument('--init_SCM', type= str, default= "obs", help='unit, obs, ILRMA')
     args = parser.parse_args()
 
     if args.gpu < 0:
@@ -316,7 +322,7 @@ if __name__ == "__main__":
             spec = np.zeros([tmp.shape[0], tmp.shape[1], M], dtype=np.complex)
         spec[:, :, m] = tmp
 
-    separater = FCA(NUM_source = args.NUM_source, xp=xp, MODE_initialize_covarianceMatrix=args.MODE_initialize_covarianceMatrix, MODE_update_parameter=args.MODE_update_parameter)
+    separater = FCA(n_source = args.n_source, xp=xp, init_SCM=args.init_SCM, mode_update_parameter=args.mode_update_parameter)
     separater.load_spectrogram(spec)
     separater.file_id = args.file_id
-    separater.solve(NUM_iteration=args.NUM_iteration, save_likelihood=False, save_parameter=False, save_path="./", interval_save_parameter=300)
+    separater.solve(n_iteration=args.n_iteration, save_likelihood=False, save_parameter=False, save_path="./", interval_save_parameter=300)

@@ -45,8 +45,16 @@ If gpu_id < 0, CPU is used, and cupy is not necessary.
 
 
 ## Citation
-If you use my code in a research project, please cite the following paper:
+If you use the code of "Jointly Diagonalizable FullRank Model" in a research project, please cite the following paper:
 
 Kouhei Sekiguchi, Aditya Arie Nugraha, Yoshiaki Bando, Kazuyoshi Yoshii:  
-[Fast Multichannel Source Separation Based on Jointly Diagonalizable Spatial Covariance Matrices](https://arxiv.org/abs/1903.03237),  
-arXiv preprint arXiv:1903.03237, 2019
+[Fast Multichannel Source Separation Based on Jointly Diagonalizable Spatial Covariance Matrices](https://www.semanticscholar.org/paper/Fast-Multichannel-Source-Separation-Based-on-Sekiguchi-Nugraha/d754917d0cdd127a681713d82a378861c5507faf),  
+European Signal Processing Conference (EUSIPCO), 2019
+
+If you use the code of "FullRank Model" in a research project, please cite the following paper:
+* Kouhei Sekiguchi, Yoshiaki Bando, Aditya Arie Nugraha, Kazuyoshi Yoshii, Tatsuya Kawahara:
+  [Semi-supervised Multichannel Speech Enhancement with a Deep Speech Prior](https://ieeexplore.ieee.org/document/8861142),
+  IEEE/ACM Transactions on Audio, Speech, and Language Processing, vol 27, no 12, pp. 2197-2212, 2019
+* Kouhei Sekiguchi, Yoshiaki Bando, Kazuyoshi Yoshii, Tatsuya Kawahara:
+  [Bayesian Multichannel Speech Enhancement with a Deep Speech Prior](http://www.apsipa.org/proceedings/2018/pdfs/0001233.pdf),
+  Asia-Pacific Signal and Information Processing Association (APSIPA), 2018

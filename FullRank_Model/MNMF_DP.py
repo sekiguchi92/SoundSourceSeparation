@@ -16,86 +16,98 @@ from configure import *
 
 
 class MNMF_DP(FCA):
+    """ Blind Speech Enhancement Using Multichannel Nonnegative Matrix Factorization with a Deep Speech Prior (MNMF-DP)
 
-    def __init__(self, speech_VAE=None, NUM_noise=1, NUM_Z_iteration=30, DIM_latent=16, NUM_basis_noise=2, xp=np, MODE_initialize_covarianceMatrix="unit", MODE_update_parameter=["all", "Z", "one_by_one"][1], MODE_update_Z=["sampling", "backprop"][0], normalize_encoder_input=True):
+    X_FTM: the observed complex spectrogram
+    covarianceMatrix_NFMM: spatial covariance matrices (SCMs) for each source
+    W_noise_NnFK: basis vectors for noise sources (Nn means the number of noise sources)
+    H_noise_NnKT: activations for noise sources
+    Z_speech_DT: latent variables for speech
+    power_speech_FT: power spectra of speech that is the output of DNN(Z_speech_DT)
+    lambda_NFT: power spectral densities of each source
+        lambda_NFT[0] = U_F * V_T * power_speech_FT
+        lambda_NFT[1:] = W_noise_NnFK @ H_noise_NnKT
+    """
+
+    def __init__(self, speech_VAE=None, n_noise=1, n_Z_iteration=30, n_latent=16, n_basis_noise=2, xp=np, init_SCM="unit", mode_update_parameter=["all", "Z", "one_by_one"][1], mode_update_Z=["sampling", "backprop"][0], normalize_encoder_input=True):
         """ initialize MNMF
 
         Parameters:
         -----------
             speech_VAE: VAE
                 trained speech VAE network
-            NUM_noise: int
+            n_noise: int
                 the number of noise sources
-            NUM_Z_iteration: int
+            n_Z_iteration: int
                 the number of iteration for updating Z per global iteration
-            DIM_latent: int
+            n_latent: int
                 the dimension of latent variable Z
-            NUM_basis_noise: int
+            n_basis_noise: int
                 the number of bases of each noise source
             xp : numpy or cupy
-            MODE_initialize_covarianceMatrix: str
+            init_SCM: str
                 how to initialize covariance matrix {unit, obs, ILRMA}
-            MODE_update_parameter: str
+            mode_update_parameter: str
                 'all' : update all the variables simultanesouly
                 'one_by_one' : update one by one
-            MODE_update_Z: str
+            mode_update_Z: str
                 how to update latent variable Z {sampling, backprop}
             normalize_encoder_input: boolean
                 normalize observation to initialize latent variable by feeding the observation into a encoder
         """
-        super(MNMF_DP, self).__init__(NUM_source=NUM_noise+1, xp=xp, MODE_initialize_covarianceMatrix=MODE_initialize_covarianceMatrix, MODE_update_parameter=MODE_update_parameter)
-        self.NUM_source, self.NUM_noise, self.NUM_speech = NUM_noise+1, NUM_noise, 1
-        self.NUM_basis_noise = NUM_basis_noise
-        self.NUM_Z_iteration = NUM_Z_iteration
-        self.DIM_latent = DIM_latent
+        super(MNMF_DP, self).__init__(n_source=n_noise+1, xp=xp, init_SCM=init_SCM, mode_update_parameter=mode_update_parameter)
+        self.n_source, self.n_noise, self.n_speech = n_noise+1, n_noise, 1
+        self.n_basis_noise = n_basis_noise
+        self.n_Z_iteration = n_Z_iteration
+        self.n_latent = n_latent
         self.speech_VAE = speech_VAE
-        self.MODE_update_Z = MODE_update_Z
+        self.mode_update_Z = mode_update_Z
         self.normalize_encoder_input = normalize_encoder_input
         self.method_name = "MNMF_DP"
 
 
-    def set_parameter(self, NUM_noise=None, NUM_iteration=None, NUM_Z_iteration=None, NUM_basis_noise=None, MODE_initialize_covarianceMatrix=None, MODE_update_parameter=None, MODE_update_Z=None):
+    def set_parameter(self, n_noise=None, n_iteration=None, n_Z_iteration=None, n_basis_noise=None, init_SCM=None, mode_update_parameter=None, mode_update_Z=None):
         """ set parameters
 
         Parameters:
         -----------
-            NUM_noise: int
+            n_noise: int
                 the number of sources
-            MODE_initialize_covarianceMatrix: str
+            init_SCM: str
                 how to initialize covariance matrix {unit, obs, ILRMA}
-            MODE_update_parameter: str
+            mode_update_parameter: str
                 'all' : update all the variables simultanesouly
                 'Z' : update variables other than Z and then update Z
                 'one_by_one' : update one by one
         """
-        if NUM_noise != None:
-            self.NUM_noise = NUM_noise
-            self.NUM_source = NUM_noise + 1
-        if NUM_iteration != None:
-            self.NUM_iteration = NUM_iteration
-        if NUM_Z_iteration != None:
-            self.NUM_Z_iteration = NUM_Z_iteration
-        if NUM_basis_noise != None:
-            self.NUM_basis_noise = NUM_basis_noise
-        if MODE_initialize_covarianceMatrix != None:
-            self.MODE_initialize_covarianceMatrix = MODE_initialize_covarianceMatrix
-        if MODE_update_parameter != None:
-            self.MODE_update_parameter = MODE_update_parameter
-        if MODE_update_Z != None:
-            self.MODE_update_Z = MODE_update_Z
+        if n_noise != None:
+            self.n_noise = n_noise
+            self.n_source = n_noise + 1
+        if n_iteration != None:
+            self.n_iteration = n_iteration
+        if n_Z_iteration != None:
+            self.n_Z_iteration = n_Z_iteration
+        if n_basis_noise != None:
+            self.n_basis_noise = n_basis_noise
+        if init_SCM != None:
+            self.init_SCM = init_SCM
+        if mode_update_parameter != None:
+            self.mode_update_parameter = mode_update_parameter
+        if mode_update_Z != None:
+            self.mode_update_Z = mode_update_Z
 
 
     def initialize_PSD(self):
-        self.lambda_NFT = self.xp.zeros([self.NUM_source, self.NUM_freq, self.NUM_time]).astype(self.xp.float)
-        self.power_speech_FT = self.xp.random.random([self.NUM_freq, self.NUM_time]).astype(self.xp.float)
+        self.lambda_NFT = self.xp.zeros([self.n_source, self.n_freq, self.n_time]).astype(self.xp.float)
+        self.power_speech_FT = self.xp.random.random([self.n_freq, self.n_time]).astype(self.xp.float)
         power_observation_FT = (self.xp.abs(self.X_FTM) ** 2).mean(axis=2)
         shape = 2
-        self.W_noise_NnFK = self.xp.random.dirichlet(np.ones(self.NUM_freq)*shape, size=[self.NUM_noise, self.NUM_basis_noise]).transpose(0, 2, 1)
-        self.H_noise_NnKT = self.xp.random.gamma(shape, (power_observation_FT.mean() * self.NUM_freq * self.NUM_mic / (self.NUM_noise * self.NUM_basis_noise)) / shape, size=[self.NUM_noise, self.NUM_basis_noise, self.NUM_time])
+        self.W_noise_NnFK = self.xp.random.dirichlet(np.ones(self.n_freq)*shape, size=[self.n_noise, self.n_basis_noise]).transpose(0, 2, 1)
+        self.H_noise_NnKT = self.xp.random.gamma(shape, (power_observation_FT.mean() * self.n_freq * self.n_mic / (self.n_noise * self.n_basis_noise)) / shape, size=[self.n_noise, self.n_basis_noise, self.n_time])
         self.H_noise_NnKT[self.H_noise_NnKT < EPS] = EPS
 
-        self.u_F = self.xp.ones(self.NUM_freq) / self.NUM_freq
-        self.v_T = self.xp.ones(self.NUM_time)
+        self.u_F = self.xp.ones(self.n_freq) / self.n_freq
+        self.v_T = self.xp.ones(self.n_time)
 
         if self.normalize_encoder_input:
             power_observation_FT = power_observation_FT / power_observation_FT.sum(axis=0).mean()
@@ -109,7 +121,7 @@ class MNMF_DP(FCA):
 
 
     def make_filename_suffix(self):
-        self.filename_suffix = "N={}-it={}-itZ={}-Kn={}-D={}-init={}-latent={}-update={}".format(self.NUM_noise, self.NUM_iteration, self.NUM_Z_iteration, self.NUM_basis_noise, self.DIM_latent, self.MODE_initialize_covarianceMatrix, self.MODE_update_Z, self.MODE_update_parameter)
+        self.filename_suffix = "N={}-it={}-itZ={}-Kn={}-D={}-init={}-latent={}-update={}".format(self.n_noise, self.n_iteration, self.n_Z_iteration, self.n_basis_noise, self.n_latent, self.init_SCM, self.mode_update_Z, self.mode_update_parameter)
 
         if hasattr(self, "name_DNN"):
            self.filename_suffix += "-DNN={}".format(self.name_DNN)
@@ -125,7 +137,7 @@ class MNMF_DP(FCA):
 
 
     def update(self):
-        if self.MODE_update_parameter == "one_by_one":
+        if self.mode_update_parameter == "one_by_one":
             self.update_axiliary_variable()
             self.update_W_noise()
             self.update_axiliary_variable()
@@ -139,14 +151,14 @@ class MNMF_DP(FCA):
             self.update_axiliary_variable()
             self.update_Z_speech(calc_constant=True)
             self.normalize()
-        elif self.MODE_update_parameter == "all":
+        elif self.mode_update_parameter == "all":
             self.update_axiliary_variable_and_Z()
             self.update_WH_noise()
             self.update_covarianceMatrix()
             self.update_UV()
             self.update_Z_speech(calc_constant=False)
             self.normalize()
-        elif self.MODE_update_parameter == "Z":
+        elif self.mode_update_parameter == "Z":
             self.update_axiliary_variable_and_Z()
             self.update_WH_noise()
             self.update_covarianceMatrix()
@@ -205,10 +217,10 @@ class MNMF_DP(FCA):
 
     def update_WH_noise(self):
         if self.xp == np: # CPU
-            a_2 = self.xp.zeros([self.NUM_noise, self.NUM_basis_noise, self.NUM_time])
-            b_2 = self.xp.zeros([self.NUM_noise, self.NUM_basis_noise, self.NUM_time])
+            a_2 = self.xp.zeros([self.n_noise, self.n_basis_noise, self.n_time])
+            b_2 = self.xp.zeros([self.n_noise, self.n_basis_noise, self.n_time])
 
-            for f in range(self.NUM_freq):
+            for f in range(self.n_freq):
                 a_1 = (self.H_noise_NnKT.transpose(0, 2, 1) * self.tr_Cov_Yinv_X_Yinv_NFT[1:, f, :, None]).sum(axis=1) # Nn K
                 b_1 = (self.H_noise_NnKT.transpose(0, 2, 1) * self.tr_Cov_Yinv_NFT[1:, f, :, None]).sum(axis=1) # Nn K
 
@@ -229,9 +241,9 @@ class MNMF_DP(FCA):
 
     def update_H_noise(self):
         if self.xp == np: # CPU
-            a_1 = self.xp.zeros([self.NUM_noise, self.NUM_basis_noise, self.NUM_time])
-            b_1 = self.xp.zeros([self.NUM_noise, self.NUM_basis_noise, self.NUM_time])
-            for f in range(self.NUM_freq):
+            a_1 = self.xp.zeros([self.n_noise, self.n_basis_noise, self.n_time])
+            b_1 = self.xp.zeros([self.n_noise, self.n_basis_noise, self.n_time])
+            for f in range(self.n_freq):
                 a_1 += (self.W_noise_NnFK[:, f, :, None] * self.tr_Cov_Yinv_X_Yinv_NFT[1:, f, None]) # Nn K T
                 b_1 += (self.W_noise_NnFK[:, f, :, None] * self.tr_Cov_Yinv_NFT[1:, f, None]) # Nn K T
             self.H_noise_NnKT = self.H_noise_NnKT * self.xp.sqrt(a_1 / b_1)
@@ -244,7 +256,7 @@ class MNMF_DP(FCA):
 
     def update_W_noise(self):
         if self.xp == np: # CPU
-            for f in range(self.NUM_freq):
+            for f in range(self.n_freq):
                 a_1 = (self.H_noise_NnKT.transpose(0, 2, 1) * self.tr_Cov_Yinv_X_Yinv_NFT[1:, f, :, None]).sum(axis=1) # Nn K
                 b_1 = (self.H_noise_NnKT.transpose(0, 2, 1) * self.tr_Cov_Yinv_NFT[1:, f, :, None]).sum(axis=1) # Nn K
                 self.W_noise_NnFK[:, f] = self.W_noise_NnFK[:, f] * self.xp.sqrt(a_1 / b_1)
@@ -289,29 +301,29 @@ class MNMF_DP(FCA):
                 the variance of the propose distribution
 
         Results:
-            self.Z_speech_DT: self.xp.array [ DIM_latent x T ]
+            self.Z_speech_DT: self.xp.array [ n_latent x T ]
                 the latent variable of each speech
         """
         if calc_constant:
             self.calculate_constant_for_update_Z()
 
-        if "backprop" in self.MODE_update_Z: # acceptance rate is calculated from likelihood
-            for it in range(self.NUM_Z_iteration):
+        if "backprop" in self.mode_update_Z: # acceptance rate is calculated from likelihood
+            for it in range(self.n_Z_iteration):
                 with chainer.using_config('train', False):
                     self.z_optimizer_speech.update(self.loss_func_Z, self.z_link_speech.z, self.speech_VAE, 0)
 
             self.Z_speech_DT = self.z_link_speech.z.data.T
             self.power_speech_FT = self.speech_VAE.decode_cupy(self.Z_speech_DT)
 
-        if "sampling" in self.MODE_update_Z:
+        if "sampling" in self.mode_update_Z:
             log_var = self.xp.log(self.xp.ones_like(self.Z_speech_DT).astype(self.xp.float32) * var_propose_distribution)
             Z_speech_old_DT = self.Z_speech_DT
             lambda_speech_old_FT = self.speech_VAE.decode_cupy(Z_speech_old_DT) * self.UV_FT
-            for it in range(self.NUM_Z_iteration):
+            for it in range(self.n_Z_iteration):
                 Z_speech_new_DT = chf.gaussian(Z_speech_old_DT, log_var).data
                 lambda_speech_new_FT = self.speech_VAE.decode_cupy(Z_speech_new_DT) * self.UV_FT
                 acceptance_rate =  self.xp.exp((-1 * (1/lambda_speech_new_FT - 1/lambda_speech_old_FT) * self.tr_Cov_Phi_X_Phi_FT -  (lambda_speech_new_FT - lambda_speech_old_FT) * self.tr_Omega_Cov_FT).sum(axis=0) - (Z_speech_new_DT ** 2 - Z_speech_old_DT ** 2).sum(axis=0)/2)
-                acceptance_boolean = self.xp.random.random([self.NUM_time]) < acceptance_rate
+                acceptance_boolean = self.xp.random.random([self.n_time]) < acceptance_rate
                 Z_speech_old_DT[:, acceptance_boolean] = Z_speech_new_DT[:, acceptance_boolean]
                 lambda_speech_old_FT[:, acceptance_boolean] = lambda_speech_new_FT[:, acceptance_boolean]
 
@@ -351,10 +363,10 @@ class MNMF_DP(FCA):
             param_list = [cuda.to_gpu(param) for param in param_list]
 
         self.covarianceMatrix_NFMM, self.lambda_NFT, self.u_F, self.v_T, self.Z_speech_DT, self.W_noise_NnFK, self.H_noise_NnKT = param_list
-        self.NUM_source, self.NUM_freq, self.NUM_time = self.lambda_NFT.shape
-        self.NUM_mic = self.covarianceMatrix_NFMM.shape[-1]
-        self.DIM_latent = self.Z_speech_DT.shape[0]
-        self.NUM_noise, self.NUM_speech = self.NUM_source - 1, 1
+        self.n_source, self.n_freq, self.n_time = self.lambda_NFT.shape
+        self.n_mic = self.covarianceMatrix_NFMM.shape[-1]
+        self.n_latent = self.Z_speech_DT.shape[0]
+        self.n_noise, self.n_speech = self.n_source - 1, 1
 
 
 
@@ -374,21 +386,21 @@ if __name__ == "__main__":
     parser.add_argument(             '--file_id', type= str, default="None", help='file id')
     parser.add_argument(                 '--gpu', type= int, default=     0, help='GPU ID')##
     parser.add_argument(               '--n_fft', type= int, default=  1024, help='number of frequencies')
-    parser.add_argument(           '--NUM_noise', type= int, default=     1, help='number of noise')
-    parser.add_argument(          '--DIM_latent', type= int, default=    16, help='dimention of encoded vector')
-    parser.add_argument(       '--MODE_update_Z', type= str, default="sampling", help='sampling, sampling2, backprop, backprop2, hybrid, hybrid2')
-    parser.add_argument(       '--NUM_iteration', type= int, default=    30, help='number of iteration')
-    parser.add_argument(     '--NUM_Z_iteration', type= int, default=    30, help='number of update Z iteration')
-    parser.add_argument(     '--NUM_basis_noise', type= int, default=    64, help='number of basis of noise (MODE_noise=NMF)')
-    parser.add_argument('--MODE_update_parameter', type= str, default= "all", help='all, one_by_one')
-    parser.add_argument('--MODE_initialize_covarianceMatrix', type=  str, default="obs", help='unit, obs, ILRMA')
+    parser.add_argument(           '--n_noise', type= int, default=     1, help='number of noise')
+    parser.add_argument(          '--n_latent', type= int, default=    16, help='dimention of encoded vector')
+    parser.add_argument(       '--mode_update_Z', type= str, default="sampling", help='sampling, sampling2, backprop, backprop2, hybrid, hybrid2')
+    parser.add_argument(       '--n_iteration', type= int, default=    30, help='number of iteration')
+    parser.add_argument(     '--n_Z_iteration', type= int, default=    30, help='number of update Z iteration')
+    parser.add_argument(     '--n_basis_noise', type= int, default=    64, help='number of basis of noise (MODE_noise=NMF)')
+    parser.add_argument('--mode_update_parameter', type= str, default= "all", help='all, one_by_one')
+    parser.add_argument('--init_SCM', type=  str, default="obs", help='unit, obs, ILRMA')
     args = parser.parse_args()
 
 
     sys.path.append("../DeepSpeechPrior")
     import network_VAE
-    model_fileName = "../DeepSpeechPrior/model-VAE-best-scale=gamma-D={}.npz".format(args.DIM_latent)
-    speech_VAE = network_VAE.VAE(n_latent=args.DIM_latent)
+    model_fileName = "../DeepSpeechPrior/model-VAE-best-scale=gamma-D={}.npz".format(args.n_latent)
+    speech_VAE = network_VAE.VAE(n_latent=args.n_latent)
     serializers.load_npz(model_fileName, speech_VAE)
     name_DNN = "VAE"
 
@@ -409,9 +421,9 @@ if __name__ == "__main__":
             spec = np.zeros([tmp.shape[0], tmp.shape[1], M], dtype=np.complex)
         spec[:, :, m] = tmp
 
-    separater = MNMF_DP(NUM_noise=args.NUM_noise, NUM_Z_iteration=args.NUM_Z_iteration, speech_VAE=speech_VAE, DIM_latent=args.DIM_latent, NUM_basis_noise=args.NUM_basis_noise, xp=xp, MODE_initialize_covarianceMatrix=args.MODE_initialize_covarianceMatrix, MODE_update_parameter=args.MODE_update_parameter)
+    separater = MNMF_DP(n_noise=args.n_noise, n_Z_iteration=args.n_Z_iteration, speech_VAE=speech_VAE, n_latent=args.n_latent, n_basis_noise=args.n_basis_noise, xp=xp, init_SCM=args.init_SCM, mode_update_parameter=args.mode_update_parameter)
 
     separater.load_spectrogram(spec)
     separater.name_DNN = name_DNN
     separater.file_id = args.file_id
-    separater.solve(NUM_iteration=args.NUM_iteration, save_likelihood=False, save_parameter=False, save_path="./", interval_save_parameter=100)
+    separater.solve(n_iteration=args.n_iteration, save_likelihood=False, save_parameter=False, save_path="./", interval_save_parameter=100)

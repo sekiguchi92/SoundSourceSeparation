@@ -14,79 +14,87 @@ from configure import *
 
 
 class MNMF(FCA):
+    """ Blind Source Separation Using Multichannel Nonnegative Matrix Factorization (MNMF)
 
-    def __init__(self, NUM_source=2, NUM_basis=2, xp=np, MODE_initialize_covarianceMatrix="unit", MODE_update_parameter=["all", "one_by_one"][0]):
+    X_FTM: the observed complex spectrogram
+    covarianceMatrix_NFMM: spatial covariance matrices (SCMs) for each source
+    W_NFK: basis vectors for each source
+    H_NKT: activations for each source
+    lambda_NFT: power spectral densities of each source (W_NFK @ H_NKT)
+    """
+
+    def __init__(self, n_source=2, n_basis=2, xp=np, init_SCM="unit", mode_update_parameter=["all", "one_by_one"][0]):
         """ initialize MNMF
 
         Parameters:
         -----------
-            NUM_source: int
+            n_source: int
                 the number of sources
-            NUM_basis: int
+            n_basis: int
                 the number of bases of each source
             xp : numpy or cupy
-            MODE_initialize_covarianceMatrix: str
+            init_SCM: str
                 how to initialize covariance matrix {unit, obs, ILRMA}
-            MODE_update_parameter: str
+            mode_update_parameter: str
                 'all' : update all the parameters simultanesouly to reduce computational cost
                 'one_by_one' : update the parameters one by one to monotonically increase log-likelihood
         """
-        super(MNMF, self).__init__(NUM_source=NUM_source, xp=xp, MODE_initialize_covarianceMatrix=MODE_initialize_covarianceMatrix, MODE_update_parameter=MODE_update_parameter)
-        self.NUM_basis = NUM_basis
+        super(MNMF, self).__init__(n_source=n_source, xp=xp, init_SCM=init_SCM, mode_update_parameter=mode_update_parameter)
+        self.n_basis = n_basis
         self.method_name = "MNMF"
 
 
-    def set_parameter(self, NUM_source=None, NUM_iteration=None, NUM_basis=None, MODE_initialize_covarianceMatrix=None, MODE_update_parameter=None):
+    def set_parameter(self, n_source=None, n_iteration=None, n_basis=None, init_SCM=None, mode_update_parameter=None):
         """ set parameters
 
         Parameters:
         -----------
-            NUM_source: int
+            n_source: int
                 the number of sources
-            MODE_initialize_covarianceMatrix: str
+            init_SCM: str
                 how to initialize covariance matrix {unit, obs, ILRMA}
-            MODE_update_parameter: str
+            mode_update_parameter: str
                 'all' : update all the variables simultanesouly
                 'one_by_one' : update one by one
         """
-        if NUM_source != None:
-            self.NUM_source = NUM_source
-        if NUM_iteration != None:
-            self.NUM_iteration = NUM_iteration
-        if NUM_basis != None:
-            self.NUM_basis = NUM_basis
-        if MODE_initialize_covarianceMatrix != None:
-            self.MODE_initialize_covarianceMatrix = MODE_initialize_covarianceMatrix
-        if MODE_update_parameter != None:
-            self.MODE_update_parameter = MODE_update_parameter
+        if n_source != None:
+            self.n_source = n_source
+        if n_iteration != None:
+            self.n_iteration = n_iteration
+        if n_basis != None:
+            self.n_basis = n_basis
+        if init_SCM != None:
+            self.init_SCM = init_SCM
+        if mode_update_parameter != None:
+            self.mode_update_parameter = mode_update_parameter
     
 
     def initialize_PSD(self):
         power_observation_FT = (self.xp.abs(self.X_FTM).astype(self.xp.float) ** 2).mean(axis=2)
         shape = 2
-        self.W_NFK = self.xp.random.dirichlet(np.ones(self.NUM_freq)*shape, size=[self.NUM_source, self.NUM_basis]).transpose(0, 2, 1)
-        self.H_NKT = self.xp.random.gamma(shape, (power_observation_FT.mean() * self.NUM_freq * self.NUM_mic / (self.NUM_source * self.NUM_basis)) / shape, size=[self.NUM_source, self.NUM_basis, self.NUM_time])
+        self.W_NFK = self.xp.random.dirichlet(np.ones(self.n_freq)*shape, size=[self.n_source, self.n_basis]).transpose(0, 2, 1)
+        self.H_NKT = self.xp.random.gamma(shape, (power_observation_FT.mean() * self.n_freq * self.n_mic / (self.n_source * self.n_basis)) / shape, size=[self.n_source, self.n_basis, self.n_time])
         self.H_NKT[self.H_NKT < EPS] = EPS
 
         self.lambda_NFT = self.W_NFK @ self.H_NKT
 
 
     def make_filename_suffix(self):
-        self.filename_suffix = "S={}-it={}-K={}-init={}-update={}".format(self.NUM_source, self.NUM_iteration, self.NUM_basis, self.MODE_initialize_covarianceMatrix, self.MODE_update_parameter)
+        self.filename_suffix = "S={}-it={}-K={}-init={}-update={}".format(self.n_source, self.n_iteration, self.n_basis, self.init_SCM, self.mode_update_parameter)
 
         if hasattr(self, "file_id"):
            self.filename_suffix += "-ID={}".format(self.file_id)
 
 
     def update(self):
-        if self.MODE_update_parameter == "one_by_one":
+        if self.mode_update_parameter == "one_by_one":
             self.update_axiliary_variable()
             self.update_W()
             self.update_axiliary_variable()
             self.update_H()
             self.update_axiliary_variable()
             self.update_covarianceMatrix()
-        if self.MODE_update_parameter == "all":
+        if self.mode_update_parameter == "all":
             self.update_axiliary_variable()
             self.update_WH()
             self.update_covarianceMatrix()
@@ -157,11 +165,11 @@ if __name__ == "__main__":
     parser.add_argument(                 '--gpu', type= int, default=     0, help='GPU ID')
     parser.add_argument(               '--n_fft', type= int, default=  1024, help='number of frequencies')
 
-    parser.add_argument(           '--NUM_basis', type= int, default=    16, help='number of basis of NMF')
-    parser.add_argument(          '--NUM_source', type= int, default=     2, help='number of noise')
-    parser.add_argument(       '--NUM_iteration', type= int, default=    30, help='number of iteration')
-    parser.add_argument('--MODE_update_parameter', type= str, default= "all", help='all, one_by_one')
-    parser.add_argument('--MODE_initialize_covarianceMatrix', type= str, default= "obs", help='unit, obs, ILRMA')
+    parser.add_argument(           '--n_basis', type= int, default=    16, help='number of basis of NMF')
+    parser.add_argument(          '--n_source', type= int, default=     2, help='number of noise')
+    parser.add_argument(       '--n_iteration', type= int, default=    30, help='number of iteration')
+    parser.add_argument('--mode_update_parameter', type= str, default= "all", help='all, one_by_one')
+    parser.add_argument('--init_SCM', type= str, default= "obs", help='unit, obs, ILRMA')
     args = parser.parse_args()
 
     if args.gpu < 0:
@@ -180,7 +188,7 @@ if __name__ == "__main__":
             spec = np.zeros([tmp.shape[0], tmp.shape[1], M], dtype=np.complex)
         spec[:, :, m] = tmp
 
-    separater = MNMF(NUM_source=args.NUM_source, NUM_basis=args.NUM_basis, xp=xp, MODE_initialize_covarianceMatrix=args.MODE_initialize_covarianceMatrix, MODE_update_parameter=args.MODE_update_parameter)
+    separater = MNMF(n_source=args.n_source, n_basis=args.n_basis, xp=xp, init_SCM=args.init_SCM, mode_update_parameter=args.mode_update_parameter)
     separater.load_spectrogram(spec)
     separater.file_id = args.file_id
-    separater.solve(NUM_iteration=args.NUM_iteration, save_likelihood=False, save_parameter=False, save_wav=True, save_path="./", interval_save_parameter=100)
+    separater.solve(n_iteration=args.n_iteration, save_likelihood=False, save_parameter=False, save_wav=True, save_path="./", interval_save_parameter=100)
