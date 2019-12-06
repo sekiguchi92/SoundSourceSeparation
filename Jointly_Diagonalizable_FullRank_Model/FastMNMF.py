@@ -20,53 +20,64 @@ except:
 
 
 class FastMNMF(FastFCA):
+    """ Blind Source Separation Using Fast Multichannel Nonnegative Matrix Factorization (FastMNMF)
 
-    def __init__(self, NUM_source=2, NUM_basis=8, xp=np, MODE_initialize_covarianceMatrix="unit"):
+    X_FTM: the observed complex spectrogram
+    Q_FMM: diagonalizer that converts a spatial covariance matrix (SCM) to a diagonal matrix
+    G_NFM: diagonal elements of the diagonalized SCMs
+    W_NFK: basis vectors for each source
+    H_NKT: activations for each source
+    lambda_NFT: power spectral densities of each source (W_NFK @ H_NKT)
+    Qx_power_FTM: power spectra of Qx
+    Y_FTM: \sum_n lambda_NFT G_NM
+    """
+
+    def __init__(self, n_source=2, n_basis=8, xp=np, init_SCM="unit"):
         """ initialize FastMNMF
 
         Parameters:
         -----------
-            NUM_source: int
+            n_source: int
                 the number of sources
-            NUM_iteration: int
+            n_iteration: int
                 the number of iteration to update all variables
-            NUM_basis: int
+            n_basis: int
                 the number of bases of each source
-            MODE_initialize_covarianceMatrix: str
+            init_SCM: str
                 how to initialize covariance matrix {unit, obs, ILRMA}
         """
-        super(FastMNMF, self).__init__(NUM_source=NUM_source, xp=xp, MODE_initialize_covarianceMatrix=MODE_initialize_covarianceMatrix)
-        self.NUM_basis = NUM_basis
+        super(FastMNMF, self).__init__(n_source=n_source, xp=xp, init_SCM=init_SCM)
+        self.n_basis = n_basis
         self.method_name = "FastMNMF"
 
 
-    def set_parameter(self, NUM_source=None, NUM_basis=None, MODE_initialize_covarianceMatrix=None):
+    def set_parameter(self, n_source=None, n_basis=None, init_SCM=None):
         """ set parameters
 
         Parameters:
         -----------
-            NUM_source: int
-            NUM_iteration: int
-            NUM_basis: int
-            MODE_initialize_covarianceMatrix: str
+            n_source: int
+            n_iteration: int
+            n_basis: int
+            init_SCM: str
                 how to initialize covariance matrix {unit, obs, ILRMA}
         """
-        super(FastMNMF, self).set_parameter(NUM_source=NUM_source, MODE_initialize_covarianceMatrix=MODE_initialize_covarianceMatrix)
-        if NUM_basis != None:
-            self.NUM_basis = NUM_basis
+        super(FastMNMF, self).set_parameter(n_source=n_source, init_SCM=init_SCM)
+        if n_basis != None:
+            self.n_basis = n_basis
 
 
     def initialize_PSD(self):
         power_observation_FT = (self.xp.abs(self.X_FTM).astype(self.xp.float32) ** 2).mean(axis=2)
         shape = 2
-        self.W_NFK = self.xp.random.dirichlet(np.ones(self.NUM_freq)*shape, size=[self.NUM_source, self.NUM_basis]).transpose(0, 2, 1)
-        self.H_NKT = self.xp.random.gamma(shape, (power_observation_FT.mean() * self.NUM_freq * self.NUM_mic / (self.NUM_source * self.NUM_basis)) / shape, size=[self.NUM_source, self.NUM_basis, self.NUM_time])
+        self.W_NFK = self.xp.random.dirichlet(np.ones(self.n_freq)*shape, size=[self.n_source, self.n_basis]).transpose(0, 2, 1)
+        self.H_NKT = self.xp.random.gamma(shape, (power_observation_FT.mean() * self.n_freq * self.n_mic / (self.n_source * self.n_basis)) / shape, size=[self.n_source, self.n_basis, self.n_time])
         self.H_NKT[self.H_NKT < EPS] = EPS
         self.lambda_NFT = self.W_NFK @ self.H_NKT
 
 
     def make_fileName_suffix(self):
-        self.fileName_suffix = "S={}-it={}-L={}-init={}".format(self.NUM_source, self.NUM_iteration, self.NUM_basis, self.MODE_initialize_covarianceMatrix)
+        self.fileName_suffix = "S={}-it={}-L={}-init={}".format(self.n_source, self.n_iteration, self.n_basis, self.init_SCM)
 
         if hasattr(self, "file_id"):
             self.fileName_suffix += "-ID={}".format(self.file_id)
@@ -98,7 +109,7 @@ class FastMNMF(FastFCA):
 
 
     def normalize(self):
-        phi_F = self.xp.sum(self.diagonalizer_FMM * self.diagonalizer_FMM.conj(), axis=(1, 2)).real / self.NUM_mic
+        phi_F = self.xp.sum(self.diagonalizer_FMM * self.diagonalizer_FMM.conj(), axis=(1, 2)).real / self.n_mic
         self.diagonalizer_FMM = self.diagonalizer_FMM / self.xp.sqrt(phi_F)[:, None, None]
         self.covarianceDiag_NFM = self.covarianceDiag_NFM / phi_F[None, :, None]
 
@@ -141,10 +152,10 @@ if __name__ == "__main__":
     parser.add_argument(         '--file_id', type= str, default="None", help='file id')
     parser.add_argument(             '--gpu', type= int, default=    0, help='GPU ID')
     parser.add_argument(           '--n_fft', type= int, default= 1024, help='number of frequencies')
-    parser.add_argument(      '--NUM_source', type= int, default=    2, help='number of noise')
-    parser.add_argument(   '--NUM_iteration', type= int, default=  100, help='number of iteration')
-    parser.add_argument(       '--NUM_basis', type= int, default=    8, help='number of basis')
-    parser.add_argument( '--MODE_initialize_covarianceMatrix', type=  str, default="obs", help='unit, obs, ILRMA')
+    parser.add_argument(      '--n_source', type= int, default=    2, help='number of noise')
+    parser.add_argument(   '--n_iteration', type= int, default=  100, help='number of iteration')
+    parser.add_argument(       '--n_basis', type= int, default=    8, help='number of basis')
+    parser.add_argument( '--init_SCM', type=  str, default="unit", help='unit, obs, ILRMA')
     args = parser.parse_args()
 
     if args.gpu < 0:
@@ -156,14 +167,16 @@ if __name__ == "__main__":
 
     wav, fs = sf.read(args.input_fileName)
     wav = wav.T
-    M = len(wav)
+    # M = len(wav)
+    M = 3
     for m in range(M):
         tmp = librosa.core.stft(wav[m], n_fft=args.n_fft, hop_length=int(args.n_fft/4))
         if m == 0:
             spec = np.zeros([tmp.shape[0], tmp.shape[1], M], dtype=np.complex)
         spec[:, :, m] = tmp
 
-    separater = FastMNMF(NUM_source=args.NUM_source, NUM_basis=args.NUM_basis, xp=xp, MODE_initialize_covarianceMatrix=args.MODE_initialize_covarianceMatrix)
+    separater = FastMNMF(n_source=args.n_source, n_basis=args.n_basis, xp=xp, init_SCM=args.init_SCM)
     separater.load_spectrogram(spec)
     separater.file_id = args.file_id
-    separater.solve(NUM_iteration=args.NUM_iteration, save_likelihood=False, save_parameter=False, save_wav=False, save_path="./", interval_save_parameter=25)
+    separater.solve(n_iteration=args.n_iteration, save_likelihood=False, save_parameter=False, save_wav=False, save_path="./", interval_save_parameter=25)
+    print(separater.covarianceDiag_NFM)
