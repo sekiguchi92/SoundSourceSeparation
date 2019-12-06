@@ -95,8 +95,8 @@ class FastMNMF(FastFCA):
 
 
     def update_WH(self):
-        tmp1_NFT = (self.covarianceDiag_NFM[:, :, None] * (self.Qx_power_FTM / (self.Y_FTM ** 2))[None]).sum(axis=3)
-        tmp2_NFT = (self.covarianceDiag_NFM[:, :, None] / self.Y_FTM[None]).sum(axis=3)
+        tmp1_NFT = (self.G_NFM[:, :, None] * (self.Qx_power_FTM / (self.Y_FTM ** 2))[None]).sum(axis=3)
+        tmp2_NFT = (self.G_NFM[:, :, None] / self.Y_FTM[None]).sum(axis=3)
         a_W = (self.H_NKT[:, None] * tmp1_NFT[:, :, None]).sum(axis=3)  # N F K T M
         b_W = (self.H_NKT[:, None] * tmp2_NFT[:, :, None]).sum(axis=3)
         a_H = (self.W_NFK[..., None] * tmp1_NFT[:, :, None] ).sum(axis=1) # N F K T M
@@ -105,16 +105,16 @@ class FastMNMF(FastFCA):
         self.H_NKT = self.H_NKT * self.xp.sqrt(a_H / b_H)
 
         self.lambda_NFT = self.W_NFK @ self.H_NKT + EPS
-        self.Y_FTM = (self.lambda_NFT[..., None] * self.covarianceDiag_NFM[:, :, None]).sum(axis=0)
+        self.Y_FTM = (self.lambda_NFT[..., None] * self.G_NFM[:, :, None]).sum(axis=0)
 
 
     def normalize(self):
-        phi_F = self.xp.sum(self.diagonalizer_FMM * self.diagonalizer_FMM.conj(), axis=(1, 2)).real / self.n_mic
-        self.diagonalizer_FMM = self.diagonalizer_FMM / self.xp.sqrt(phi_F)[:, None, None]
-        self.covarianceDiag_NFM = self.covarianceDiag_NFM / phi_F[None, :, None]
+        phi_F = self.xp.sum(self.Q_FMM * self.Q_FMM.conj(), axis=(1, 2)).real / self.n_mic
+        self.Q_FMM = self.Q_FMM / self.xp.sqrt(phi_F)[:, None, None]
+        self.G_NFM = self.G_NFM / phi_F[None, :, None]
 
-        mu_NF = (self.covarianceDiag_NFM).sum(axis=2).real
-        self.covarianceDiag_NFM = self.covarianceDiag_NFM / mu_NF[:, :, None]
+        mu_NF = (self.G_NFM).sum(axis=2).real
+        self.G_NFM = self.G_NFM / mu_NF[:, :, None]
         self.W_NFK = self.W_NFK * mu_NF[:, :, None]
 
         nu_NK = self.W_NFK.sum(axis=1)
@@ -126,7 +126,7 @@ class FastMNMF(FastFCA):
 
 
     def save_parameter(self, fileName):
-        param_list = [self.lambda_NFT, self.covarianceDiag_NFM, self.diagonalizer_FMM, self.W_NFK, self.H_NKT]
+        param_list = [self.lambda_NFT, self.G_NFM, self.Q_FMM, self.W_NFK, self.H_NKT]
         if self.xp != np:
             param_list = [self.convert_to_NumpyArray(param) for param in param_list]
 
@@ -138,7 +138,7 @@ class FastMNMF(FastFCA):
         if self.xp != np:
             param_list = [cuda.to_gpu(param) for param in param_list]
 
-        self.lambda_NFT, self.covarianceDiag_NFM, self.diagonalizer_FMM, self.W_NFK, self.H_NKT = param_list
+        self.lambda_NFT, self.G_NFM, self.Q_FMM, self.W_NFK, self.H_NKT = param_list
 
 
 
@@ -148,14 +148,14 @@ if __name__ == "__main__":
     import sys, os
 
     parser = argparse.ArgumentParser()
-    parser.add_argument(    'input_fileName', type= str, help='filename of the multichannel observed signals')
-    parser.add_argument(         '--file_id', type= str, default="None", help='file id')
-    parser.add_argument(             '--gpu', type= int, default=    0, help='GPU ID')
-    parser.add_argument(           '--n_fft', type= int, default= 1024, help='number of frequencies')
-    parser.add_argument(      '--n_source', type= int, default=    2, help='number of noise')
-    parser.add_argument(   '--n_iteration', type= int, default=  100, help='number of iteration')
-    parser.add_argument(       '--n_basis', type= int, default=    8, help='number of basis')
-    parser.add_argument( '--init_SCM', type=  str, default="unit", help='unit, obs, ILRMA')
+    parser.add_argument('input_fileName', type= str, help='filename of the multichannel observed signals')
+    parser.add_argument(     '--file_id', type= str, default="None", help='file id')
+    parser.add_argument(         '--gpu', type= int, default=     0, help='GPU ID')
+    parser.add_argument(       '--n_fft', type= int, default=  1024, help='number of frequencies')
+    parser.add_argument(    '--n_source', type= int, default=     4, help='number of noise')
+    parser.add_argument(     '--n_basis', type= int, default=     8, help='number of basis')
+    parser.add_argument(    '--init_SCM', type= str, default="unit", help='unit, obs, ILRMA')
+    parser.add_argument( '--n_iteration', type= int, default=   100, help='number of iteration')
     args = parser.parse_args()
 
     if args.gpu < 0:
@@ -167,8 +167,7 @@ if __name__ == "__main__":
 
     wav, fs = sf.read(args.input_fileName)
     wav = wav.T
-    # M = len(wav)
-    M = 3
+    M = len(wav)
     for m in range(M):
         tmp = librosa.core.stft(wav[m], n_fft=args.n_fft, hop_length=int(args.n_fft/4))
         if m == 0:
@@ -179,4 +178,3 @@ if __name__ == "__main__":
     separater.load_spectrogram(spec)
     separater.file_id = args.file_id
     separater.solve(n_iteration=args.n_iteration, save_likelihood=False, save_parameter=False, save_wav=False, save_path="./", interval_save_parameter=25)
-    print(separater.covarianceDiag_NFM)

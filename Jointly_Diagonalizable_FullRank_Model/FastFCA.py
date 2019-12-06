@@ -303,14 +303,13 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument(    'input_fileName', type= str, help='filename of the multichannel observed signals')
-    parser.add_argument(         '--file_id', type= str, default="None", help='file id')
-    parser.add_argument(             '--gpu', type=  int, default=    0, help='GPU ID')
-    parser.add_argument(           '--n_fft', type=  int, default= 1024, help='number of frequencies')
-    parser.add_argument(      '--n_source', type=  int, default=    2, help='number of noise')
-    parser.add_argument(   '--n_iteration', type=  int, default=  100, help='number of iteration')
-    parser.add_argument(       '--n_basis', type=  int, default=    8, help='number of basis')
-    parser.add_argument( '--init_SCM', type=  str, default="obs", help='unit, obs, ILRMA')
+    parser.add_argument('input_fileName', type= str, help='filename of the multichannel observed signals')
+    parser.add_argument(     '--file_id', type= str, default="None", help='file id')
+    parser.add_argument(         '--gpu', type= int, default=     0, help='GPU ID')
+    parser.add_argument(       '--n_fft', type= int, default=  1024, help='number of frequencies')
+    parser.add_argument(    '--n_source', type= int, default=     2, help='number of noise')
+    parser.add_argument(    '--init_SCM', type= str, default="unit", help='unit, obs, ILRMA')
+    parser.add_argument( '--n_iteration', type= int, default=   100, help='number of iteration')
     args = parser.parse_args()
 
     if args.gpu < 0:

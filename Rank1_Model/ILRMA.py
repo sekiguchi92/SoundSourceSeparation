@@ -34,7 +34,7 @@ class ILRMA:
     W_NFK: basis vectors for each source
     H_NKT: activations for each source
     lambda_NFT: power spectral densities of each source (W_NFK @ H_NKT)
-    SeparationMatrix_FMM: separation matrix
+    SeparationMatrix_FMM: separation matrices
     """
 
     def __init__(self, n_basis=2, xp=np, init_SCM="unit"):
