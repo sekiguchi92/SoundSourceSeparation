@@ -382,18 +382,18 @@ class Z_link(chainer.link.Link):
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument(        'input_fileName', type= str, help='filename of the multichannel observed signals')
-    parser.add_argument(             '--file_id', type= str, default="None", help='file id')
-    parser.add_argument(                 '--gpu', type= int, default=     0, help='GPU ID')##
-    parser.add_argument(               '--n_fft', type= int, default=  1024, help='number of frequencies')
-    parser.add_argument(           '--n_noise', type= int, default=     1, help='number of noise')
-    parser.add_argument(          '--n_latent', type= int, default=    16, help='dimention of encoded vector')
-    parser.add_argument(       '--mode_update_Z', type= str, default="sampling", help='sampling, sampling2, backprop, backprop2, hybrid, hybrid2')
-    parser.add_argument(       '--n_iteration', type= int, default=    30, help='number of iteration')
-    parser.add_argument(     '--n_Z_iteration', type= int, default=    30, help='number of update Z iteration')
-    parser.add_argument(     '--n_basis_noise', type= int, default=    64, help='number of basis of noise (MODE_noise=NMF)')
+    parser.add_argument(         'input_fileName', type= str, help='filename of the multichannel observed signals')
+    parser.add_argument(              '--file_id', type= str, default="None", help='file id')
+    parser.add_argument(                  '--gpu', type= int, default=     0, help='GPU ID')##
+    parser.add_argument(                '--n_fft', type= int, default=  1024, help='number of frequencies')
+    parser.add_argument(              '--n_noise', type= int, default=     1, help='number of noise')
+    parser.add_argument(             '--n_latent', type= int, default=    16, help='dimention of encoded vector')
+    parser.add_argument(        '--n_basis_noise', type= int, default=    64, help='number of basis of noise (MODE_noise=NMF)')
+    parser.add_argument(             '--init_SCM', type=  str, default="obs", help='unit, obs, ILRMA')
+    parser.add_argument(          '--n_iteration', type= int, default=    30, help='number of iteration')
+    parser.add_argument(        '--n_Z_iteration', type= int, default=    30, help='number of update Z iteration')
+    parser.add_argument(        '--mode_update_Z', type= str, default="sampling", help='sampling, sampling2, backprop, backprop2, hybrid, hybrid2')
     parser.add_argument('--mode_update_parameter', type= str, default= "all", help='all, one_by_one')
-    parser.add_argument('--init_SCM', type=  str, default="obs", help='unit, obs, ILRMA')
     args = parser.parse_args()
 
 

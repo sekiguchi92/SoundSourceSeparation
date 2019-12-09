@@ -107,7 +107,9 @@ class FastFCA():
     def initialize_covarianceMatrix(self):
         if "unit" in self.init_SCM:
             self.Q_FMM = self.xp.tile(self.xp.eye(self.n_mic), [self.n_freq, 1, 1]).astype(self.xp.complex)
-            self.G_NFM = self.xp.ones([self.n_source, self.n_freq, self.n_mic], dtype=self.xp.float) / self.n_mic
+            self.G_NFM = self.xp.ones([self.n_source, self.n_freq, self.n_mic], dtype=self.xp.float) * 1e-2
+            if self.n_source <= self.n_mic:
+                self.G_NFM[list(range(self.n_source)), :, list(range(self.n_source))] = 1
         elif "obs" in self.init_SCM:
             mixture_covarianceMatrix_FMM = self.XX_FTMM.sum(axis=1) / (self.xp.trace(self.XX_FTMM, axis1=2, axis2=3).sum(axis=1))[:, None, None]
             eig_val, eig_vec = np.linalg.eigh(self.convert_to_NumpyArray(mixture_covarianceMatrix_FMM))
