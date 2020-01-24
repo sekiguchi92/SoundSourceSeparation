@@ -134,8 +134,9 @@ class FCA:
             ilrma.solve(n_iteration=15, save_likelihood=False, save_wav=False, save_path="./", interval_save_parameter=1000)
             MixingMatrix_FMM = self.calculateInverseMatrix(ilrma.SeparationMatrix_FMM)
             separated_spec_power = self.xp.abs(ilrma.separated_spec).mean(axis=(1, 2))
-            # separated_spec_power = self.xp.abs(ilrma.separated_spec[:, 400:2000]).max(axis=2).mean(axis=1) # For speech enhancement
-            self.covarianceMatrix_NFMM[0] = MixingMatrix_FMM[:, :, separated_spec_power.argmax()][:, :, None] @ MixingMatrix_FMM[:, :, separated_spec_power.argmax()][:, None].conj() + 1e-6 * self.xp.eye(self.n_mic)[None]
+            for n in range(self.n_source):
+                self.covarianceMatrix_NFMM[n] = MixingMatrix_FMM[:, :, separated_spec_power.argmax(), None] @ MixingMatrix_FMM[:, None, :, separated_spec_power.argmax()].conj() + 1e-2 * self.xp.eye(self.n_mic)[None]
+                separated_spec_power[separated_spec_power.argmax()] = -np.inf
 
         self.covarianceMatrix_NFMM = self.covarianceMatrix_NFMM / self.xp.trace(self.covarianceMatrix_NFMM, axis1=2 ,axis2=3)[:, :, None, None]
 

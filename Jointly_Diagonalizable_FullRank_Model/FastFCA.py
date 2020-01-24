@@ -124,8 +124,10 @@ class FastFCA():
             ilrma.solve(n_iteration=15, save_likelihood=False, save_wav=False, save_path="./", interval_save_parameter=1000)
             separated_spec_power = self.xp.abs(ilrma.separated_spec).mean(axis=(1, 2))
             self.Q_FMM = ilrma.SeparationMatrix_FMM
-            self.G_NFM = self.xp.ones([self.n_source, self.n_freq, self.n_mic], dtype=self.xp.float) * 0.1
-            self.G_NFM[0, :, separated_spec_power.argmax()] = 1
+            self.G_NFM = self.xp.ones([self.n_source, self.n_freq, self.n_mic], dtype=self.xp.float) * 1e-2
+            for n in range(self.n_source):
+                self.G_NFM[n, :, separated_spec_power.argmax()] = 1
+                separated_spec_power[separated_spec_power.argmax()] = 0
         else:
             print("Please specify how to initialize covariance matrix {unit, obs}")
             raise ValueError
