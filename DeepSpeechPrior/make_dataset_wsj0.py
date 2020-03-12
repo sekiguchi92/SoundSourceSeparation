@@ -42,8 +42,8 @@ if __name__ == "__main__":
     parser.add_argument(     '--n_fft', type=int, default=1024)
     parser.add_argument('--hop_length', type=int, default= 256)
     args = parser.parse_args()
-    wsj0_path = "/n/rd25/mimura/corpus/CHiME3/data/audio/16kHz/isolated/tr05_org"
-    dataset_save_path = '/n/sd2/sekiguchi/dataset/'
+    wsj0_path = "./corpus/CHiME3/data/audio/16kHz/isolated/tr05_org"
+    dataset_save_path = './'
 
     make_dataset(wsj0_path, dataset_save_path)
 

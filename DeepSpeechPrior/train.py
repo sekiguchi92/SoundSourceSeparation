@@ -14,11 +14,11 @@ from chainer.cuda import cupy as cp
 import network_VAE
 from configure_VAE import *
 
-def train_VAE(gpu=GPU, dataset_fileName=DATASET_SAVE_PATH+'/wsj0_normalize_{}_{}.pic'.format(N_FFT, HOP_LENGTH)):
-    file_suffix = "normal-scale=gamma-D={}".format(N_LATENT)
+def train_VAE(gpu=GPU, dataset_fileName=f'{DATASET_SAVE_PATH}/wsj0_normalize_{N_FFT}_{HOP_LENGTH}.pic'):
+    file_suffix = f"normal-scale=gamma-D={N_LATENT}"
 
     if os.path.isfile(MODEL_SAVE_PATH + '/model-best-{0}.npz'.format(file_suffix) ):
-        print(MODEL_SAVE_PATH + "model-best-{}.npz already exist".format(file_suffix))
+        print(f"{MODEL_SAVE_PATH}model-best-{file_suffix}.npz already exist")
         exit
 
     cuda.get_device_from_id(gpu).use()

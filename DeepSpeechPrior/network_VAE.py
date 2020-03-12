@@ -5,10 +5,9 @@ from chainer import functions as chf
 from chainer import links as chl
 from chainer.functions.loss.vae import gaussian_kl_divergence
 
-from configure_VAE import *
 
 class VAE(chainer.Chain):
-    def __init__(self, n_freq=int(N_FFT/2+1), n_latent=N_LATENT, n_hidden=128):
+    def __init__(self, n_freq=513, n_latent=16, n_hidden=128):
         super(VAE, self).__init__()
         self.n_latent = n_latent
 
