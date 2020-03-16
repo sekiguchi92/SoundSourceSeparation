@@ -79,7 +79,7 @@ class FCA:
         elif FLAG_CupyInverse_Enabled:
             return inv_gpu_batch
         else:
-            return lambda x: cuda.to_gpu(np.linalg.inv(convert_to_NumpyArray(x)))
+            return lambda x: cuda.to_gpu(np.linalg.inv(self.convert_to_NumpyArray(x)))
 
 
     def set_parameter(self, n_iteration=None, n_source=None, init_SCM=None, mode_update_parameter=None):
