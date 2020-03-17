@@ -22,10 +22,10 @@ except:
 
 try:
     import cupy_eig
-    FLAG_CupyDeterminant_Enabled = True
+    FLAG_CupyEigh_Enabled = True
 except:
     print("---Warning--- You cannot use cupy complex determinant")
-    FLAG_CupyDeterminant_Enabled = False
+    FLAG_CupyEigh_Enabled = False
 EPS = 1e-10
 
 
@@ -91,7 +91,7 @@ def geometric_mean_invA(A_inv, B, xp=np):
         A_half_inv = matrix_sqrth(A_inv)
         A_half = np.linalg.inv(A_half_inv)
         ans = A_half @ matrix_sqrth(A_half_inv @ B @ A_half_inv) @ A_half
-    elif FLAG_CupyDeterminant_Enabled:
+    elif FLAG_CupyEigh_Enabled:
         A_half_inv = matrix_sqrt_for_cupy_HermitianMatrix(A_inv)
         A_half = inv_gpu_batch(A_half_inv)
         ans = A_half @ matrix_sqrt_for_cupy_HermitianMatrix(A_half_inv @ B @ A_half_inv) @ A_half
