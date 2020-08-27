@@ -2,7 +2,8 @@
 Tools for multi-channel speech enhancement (and source separation)
 
 ## News
-I have published new paper entitled ["Fast Multichannel Nonnegative Matrix Factorization with Directivity-Aware Jointly-Diagonalizable Spatial Covariance Matrices for Blind Source Separation"](https://ieeexplore.ieee.org/document/9177266),
+I have published my new paper entitled  
+["Fast Multichannel Nonnegative Matrix Factorization with Directivity-Aware Jointly-Diagonalizable Spatial Covariance Matrices for Blind Source Separation"](https://ieeexplore.ieee.org/document/9177266),
 IEEE/ACM Transactions on Audio, Speech, and Language Processing, 2020.  
 This paper is about the extension of FastMNMF, called FastMNMF2.
 
