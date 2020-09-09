@@ -1,5 +1,5 @@
-# SpeechEnhancement
-Tools for multi-channel speech enhancement (and source separation)
+# Sound Source Separation
+Tools for multi-channel sound source separation and speech enhancement
 
 ## News
 - I have published my new paper entitled  
