@@ -29,7 +29,8 @@ class ILRMA_DP(ILRMA):
     SeparationMatrix_FMM: separation matrices
     """
 
-    def __init__(self, speech_VAE=None, n_basis_noise=2, xp=np, init_SCM="unit", n_Z_iteration=30, mode_update_Z="sampling", n_latent=16, normalize_encoder_input=True):
+    def __init__(self, speech_VAE=None, n_basis_noise=2, xp=np, init_SCM="unit", n_Z_iteration=30, mode_update_Z="sampling",\
+            n_latent=16, normalize_encoder_input=True, n_bit=64, seed=0):
         """ initialize RANK1_MSE_DSP
 
         Parameters:
@@ -50,8 +51,13 @@ class ILRMA_DP(ILRMA):
                 the dimension of latent variable Z
             normalize_encoder_input: boolean
                 normalize observation to initialize latent variable by feeding the observation into a encoder
+            n_bit:int (32 or 64)
+                The number of bits for floating point number.
+                '32' may degrade the peformance in exchange for lower computational cost.
+                32 -> float32 and complex64
+                64 -> float64 and complex128
         """
-        super(ILRMA_DP, self).__init__(xp=xp, init_SCM=init_SCM)
+        super(ILRMA_DP, self).__init__(xp=xp, init_SCM=init_SCM, n_bit=n_bit, seed=seed)
         self.method_name = "ILRMA_DP"
         self.n_basis_noise = n_basis_noise
         self.mode_update_Z = mode_update_Z
@@ -60,29 +66,16 @@ class ILRMA_DP(ILRMA):
         self.xp = self.speech_VAE.xp
         self.normalize_encoder_input = normalize_encoder_input
         self.n_latent = n_latent
-    
-
-    def set_parameter(self, n_basis_noise=None, init_SCM=None, n_Z_iteration=None, mode_update_Z=None):
-        if n_basis_noise != None:
-            self.n_basis_noise = n_basis_noise
-        if init_SCM != None:
-            self.init_SCM = init_SCM
-        if n_Z_iteration != None:
-            self.n_Z_iteration = n_Z_iteration
-        if mode_update_Z != None:
-            self.mode_update_Z = mode_update_Z
 
 
     def initialize_PSD(self):
         self.n_speech, self.n_noise = 1, self.n_mic-1
-        power_observation_FT = (self.xp.abs(self.X_FTM).astype(self.xp.float) ** 2).mean(axis=2)
-        self.U_F = self.xp.ones(self.n_freq) / self.n_freq
-        self.V_T = self.xp.ones(self.n_time)
-        shape = 2
-        self.W_noise_NnFK = self.xp.random.dirichlet(np.ones(self.n_freq)*shape, size=[self.n_noise, self.n_basis_noise]).transpose(0, 2, 1)
-        self.H_noise_NnKT = self.xp.random.gamma(shape, (power_observation_FT.mean() * self.n_freq * self.n_mic / (self.n_noise * self.n_basis_noise)) / shape, size=[self.n_noise, self.n_basis_noise, self.n_time])
-        self.H_noise_NnKT[self.H_noise_NnKT < EPS] = EPS
+        self.W_noise_NnFK = self.xp.random.rand(self.n_noise, self.n_freq, self.n_basis_noise).astype(self.TYPE_FLOAT)
+        self.H_noise_NnKT = self.xp.random.rand(self.n_noise, self.n_basis_noise, self.n_time).astype(self.TYPE_FLOAT)
+        self.U_F = self.xp.ones(self.n_freq, dtype=self.TYPE_FLOAT) / self.n_freq
+        self.V_T = self.xp.ones(self.n_time, dtype=self.TYPE_FLOAT)
 
+        power_observation_FT = (self.xp.abs(self.X_FTM).astype(self.xp.float) ** 2).mean(axis=2)
         if self.normalize_encoder_input:
             power_observation_FT = power_observation_FT / power_observation_FT.sum(axis=0).mean()
         self.Z_speech_DT = self.speech_VAE.encode_cupy(power_observation_FT.astype(self.xp.float32))
@@ -90,7 +83,7 @@ class ILRMA_DP(ILRMA):
         self.z_optimizer_speech = chainer.optimizers.Adam().setup(self.z_link_speech)
         self.power_speech_FT = self.speech_VAE.decode_cupy(self.Z_speech_DT)
 
-        self.lambda_NFT = self.xp.zeros([self.n_source, self.n_freq, self.n_time]).astype(self.xp.float)
+        self.lambda_NFT = self.xp.zeros([self.n_source, self.n_freq, self.n_time]).astype(self.TYPE_FLOAT)
         self.lambda_NFT[0] = self.U_F[:, None] * self.V_T[None] * self.power_speech_FT
         self.lambda_NFT[1:] = self.W_noise_NnFK @ self.H_noise_NnKT
 
@@ -104,32 +97,32 @@ class ILRMA_DP(ILRMA):
 
 
     def make_filename_suffix(self):
-        self.filename_suffix = "it={}-itZ={}-Ln={}-D={}-init={}-latent={}".format(self.n_iteration, self.n_Z_iteration, self.n_basis_noise, self.n_latent, self.init_SCM, self.mode_update_Z)
+        self.filename_suffix = f"it={self.n_iteration}-itZ={self.n_Z_iteration}-Ln={self.n_basis_noise}-D={self.n_latent}-init={self.init_SCM}-latent={self.mode_update_Z}"
+
         if hasattr(self, "name_DNN"):
-            self.filename_suffix += "-DNN={}".format(self.name_DNN)
-        else:
-            self.filename_suffix += "-DNN=NoName"
+            self.filename_suffix += f"-DNN={self.name_DNN}"
+        if self.n_bit != 64:
+            self.filename_suffix += f"-bit={self.n_bit}"
         if hasattr(self, "file_id"):
-           self.filename_suffix += "-ID={}".format(self.file_id)
-        else:
-            print("====================\n\nWarning: Please set self.file_id\n\n====================")
+            self.filename_suffix += f"-ID={self.file_id}"
+        print("param:", self.filename_suffix)
 
 
     def normalize(self):
-        mu_NF = self.xp.zeros([self.n_mic, self.n_freq])
+        mu_NF = self.xp.zeros([self.n_mic, self.n_freq], dtype=self.TYPE_FLOAT)
         for m in range(self.n_mic):
             mu_NF[m] = (self.SeparationMatrix_FMM[:, m] * self.SeparationMatrix_FMM[:, m].conj()).sum(axis=1).real
-            self.SeparationMatrix_FMM[:, m] = self.SeparationMatrix_FMM[:, m] / self.xp.sqrt(mu_NF[m, :, None])
-        self.U_F = self.U_F / mu_NF[0]
-        self.W_noise_NnFK = self.W_noise_NnFK / mu_NF[1:, :, None]
+            self.SeparationMatrix_FMM[:, m] /= self.xp.sqrt(mu_NF[m, :, None])
+        self.U_F /= mu_NF[0]
+        self.W_noise_NnFK /= mu_NF[1:, :, None]
 
         nu = self.U_F.sum()
-        self.U_F = self.U_F / nu
-        self.V_T = nu * self.V_T
+        self.U_F /= nu
+        self.V_T *= nu
 
         nu_NnK = self.W_noise_NnFK.sum(axis=1)
-        self.W_noise_NnFK = self.W_noise_NnFK / nu_NnK[:, None]
-        self.H_noise_NnKT = self.H_noise_NnKT * nu_NnK[:, :, None]
+        self.W_noise_NnFK /= nu_NnK[:, None]
+        self.H_noise_NnKT *= nu_NnK[:, :, None]
 
         self.lambda_NFT[0] = self.U_F[:, None] * self.V_T[None] * self.power_speech_FT
         self.lambda_NFT[1:] = self.W_noise_NnFK @ self.H_noise_NnKT
@@ -151,34 +144,17 @@ class ILRMA_DP(ILRMA):
             self.H_noise_NnKT: self.xp.array [ n_noise x n_basis_noise x T ]
                 the activation of each basis
         """
-        if self.xp == np:
-            for f in range(self.n_freq):
-                numerator = (self.H_noise_NnKT * (self.Y_power_FTN[f, :, self.n_speech:].T / ( self.lambda_NFT[self.n_speech:, f] ** 2 ) )[:, None] ).sum(axis=2)
-                denominator = ( self.H_noise_NnKT / self.lambda_NFT[self.n_speech:, f, None] ).sum(axis=2) # n_noise * n_basis_noise * F
-                self.W_noise_NnFK[:, f] = self.W_noise_NnFK[:, f] * self.xp.sqrt(numerator / denominator)
-            self.W_noise_NnFK[self.W_noise_NnFK < EPS] = EPS
-            self.lambda_NFT[1:] = self.xp.matmul(self.W_noise_NnFK, self.H_noise_NnKT)
+        numerator = (self.H_noise_NnKT[:, None] * (self.Y_power_FTN.transpose(2, 0, 1)[self.n_speech:] / ( self.lambda_NFT[self.n_speech:] ** 2 ) )[:, :, None] ).sum(axis=3)
+        denominator = ( self.H_noise_NnKT[:, None] / self.lambda_NFT[self.n_speech:][:, :, None] ).sum(axis=3) # n_noise * n_basis_noise * F
+        self.W_noise_NnFK = self.W_noise_NnFK * self.xp.sqrt(numerator / denominator)
+        self.W_noise_NnFK[self.W_noise_NnFK < EPS] = EPS
+        self.lambda_NFT[1:] = self.xp.matmul(self.W_noise_NnFK, self.H_noise_NnKT)
 
-            numerator = self.xp.zeros_like(self.H_noise_NnKT)
-            denominator = self.xp.zeros_like(self.H_noise_NnKT)
-            for f in range(self.n_freq):
-                numerator += self.W_noise_NnFK[:, f, :, None] * (self.Y_power_FTN[f, :, self.n_speech:].T / ( self.lambda_NFT[self.n_speech:, f] ** 2 ) )[:, None]
-                denominator += self.W_noise_NnFK[:, f, :, None] / self.lambda_NFT[self.n_speech:, f, None] # n_noise * n_basis_noise * T
-            self.H_noise_NnKT = self.H_noise_NnKT * self.xp.sqrt(numerator / denominator)
-            self.H_noise_NnKT[self.H_noise_NnKT < EPS] = EPS
-            self.lambda_NFT[1:] = self.xp.matmul(self.W_noise_NnFK, self.H_noise_NnKT)
-        else:
-            numerator = (self.H_noise_NnKT[:, None] * (self.Y_power_FTN.transpose(2, 0, 1)[self.n_speech:] / ( self.lambda_NFT[self.n_speech:] ** 2 ) )[:, :, None] ).sum(axis=3)
-            denominator = ( self.H_noise_NnKT[:, None] / self.lambda_NFT[self.n_speech:][:, :, None] ).sum(axis=3) # n_noise * n_basis_noise * F
-            self.W_noise_NnFK = self.W_noise_NnFK * self.xp.sqrt(numerator / denominator)
-            self.W_noise_NnFK[self.W_noise_NnFK < EPS] = EPS
-            self.lambda_NFT[1:] = self.xp.matmul(self.W_noise_NnFK, self.H_noise_NnKT)
-
-            numerator = (self.W_noise_NnFK[:, :, :, None] * (self.Y_power_FTN.transpose(2, 0, 1)[self.n_speech] / ( self.lambda_NFT[self.n_speech:] ** 2 ) )[:, :, None] ).sum(axis=1)
-            denominator = ( self.W_noise_NnFK[:, :, :, None] / self.lambda_NFT[self.n_speech:][:, :, None] ).sum(axis=1) # n_noise * n_basis_noise * T
-            self.H_noise_NnKT = self.H_noise_NnKT * self.xp.sqrt(numerator / denominator)
-            self.H_noise_NnKT[self.H_noise_NnKT < EPS] = EPS
-            self.lambda_NFT[1:] = self.xp.matmul(self.W_noise_NnFK, self.H_noise_NnKT)
+        numerator = (self.W_noise_NnFK[:, :, :, None] * (self.Y_power_FTN.transpose(2, 0, 1)[self.n_speech] / ( self.lambda_NFT[self.n_speech:] ** 2 ) )[:, :, None] ).sum(axis=1)
+        denominator = ( self.W_noise_NnFK[:, :, :, None] / self.lambda_NFT[self.n_speech:][:, :, None] ).sum(axis=1) # n_noise * n_basis_noise * T
+        self.H_noise_NnKT = self.H_noise_NnKT * self.xp.sqrt(numerator / denominator)
+        self.H_noise_NnKT[self.H_noise_NnKT < EPS] = EPS
+        self.lambda_NFT[1:] = self.xp.matmul(self.W_noise_NnFK, self.H_noise_NnKT)
 
 
     def calculate_log_likelihood(self):
@@ -260,15 +236,16 @@ class Z_link(chainer.link.Link):
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument(    'input_fileName', type= str, help='filename of the multichannel observed signals')
-    parser.add_argument(         '--file_id', type= str, default="None", help='file id')
-    parser.add_argument(             '--gpu', type= int, default=     0, help='GPU ID')
-    parser.add_argument(      '--n_latent', type= int, default=   16, help='dimention of encoded vector')
-    parser.add_argument(   '--n_iteration', type= int, default=  100, help='number of iteration')
-    parser.add_argument( '--n_Z_iteration', type= int, default=   30, help='number of update Z iteration')
-    parser.add_argument( '--n_basis_noise', type= int, default=   64, help='number of basis of noise (MODE_noise=NMF)')
-    parser.add_argument(   '--mode_update_Z', type= str, default="sampling", help='sampling, sampling2, backprop, backprop2, hybrid, hybrid2')
-    parser.add_argument( '--init_SCM', type=  str, default="obs", help='unit, obs')
+    parser.add_argument(  'input_fileName', type= str, help='filename of the multichannel observed signals')
+    parser.add_argument(       '--file_id', type= str, default=    "None", help='file id')
+    parser.add_argument(           '--gpu', type= int, default=         0, help='GPU ID')
+    parser.add_argument(      '--n_latent', type= int, default=        16, help='dimention of encoded vector')
+    parser.add_argument(      '--init_SCM', type= str, default=     "obs", help='unit, obs')
+    parser.add_argument(   '--n_iteration', type= int, default=       100, help='number of iteration')
+    parser.add_argument( '--n_Z_iteration', type= int, default=        30, help='number of update Z iteration')
+    parser.add_argument( '--n_basis_noise', type= int, default=        64, help='number of basis of noise (MODE_noise=NMF)')
+    parser.add_argument( '--mode_update_Z', type= str, default="sampling", help='sampling, sampling2, backprop, backprop2, hybrid, hybrid2')
+    parser.add_argument(         '--n_bit', type= int, default=        64, help='number of bits for floating point number')
     args = parser.parse_args()
 
     if args.gpu < 0:
@@ -297,7 +274,7 @@ if __name__ == "__main__":
             spec = np.zeros([tmp.shape[0], tmp.shape[1], M], dtype=np.complex)
         spec[:, :, m] = tmp
 
-    separater = ILRMA_DP(speech_VAE=speech_VAE, n_Z_iteration=args.n_Z_iteration, n_basis_noise=args.n_basis_noise, xp=xp, init_SCM=args.init_SCM, mode_update_Z=args.mode_update_Z)
+    separater = ILRMA_DP(speech_VAE=speech_VAE, n_Z_iteration=args.n_Z_iteration, n_basis_noise=args.n_basis_noise, xp=xp, init_SCM=args.init_SCM, mode_update_Z=args.mode_update_Z, n_bit=args.n_bit, seed=0)
     separater.load_spectrogram(spec)
     separater.file_id = args.file_id
     separater.name_DNN = name_DNN

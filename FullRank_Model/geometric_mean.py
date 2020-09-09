@@ -4,28 +4,12 @@
 import sys, os
 import numpy as np
 
-sys.path.append("../CupyLibrary")
 try:
     from chainer import cuda
     import cupy as cp
-    FLAG_GPU_Available = True
 except:
     print("---Warning--- You cannot use GPU acceleration because chainer or cupy is not installed")
-    FLAG_GPU_Available = False
 
-try:
-    from cupy_matrix_inverse import inv_gpu_batch
-    FLAG_CupyInverse_Enabled = True
-except:
-    print("---Warning--- You cannot use cupy inverse calculation")
-    FLAG_CupyInverse_Enabled = False
-
-try:
-    import cupy_eig
-    FLAG_CupyEigh_Enabled = True
-except:
-    print("---Warning--- You cannot use cupy complex determinant")
-    FLAG_CupyEigh_Enabled = False
 EPS = 1e-10
 
 
@@ -81,7 +65,7 @@ def geometric_mean(A, B, xp=np):
         ans = A_half @ matrix_sqrth(A_half_inv @ B @ A_half_inv) @ A_half
     else:
         A_half = matrix_sqrt_for_cupy_HermitianMatrix(A)
-        A_half_inv = inv_gpu_batch(A_half)
+        A_half_inv = xp.linalg.inv(A_half)
         ans = A_half @ matrix_sqrt_for_cupy_HermitianMatrix(A_half_inv @ B @ A_half_inv) @ A_half
     return ans
 
@@ -91,10 +75,6 @@ def geometric_mean_invA(A_inv, B, xp=np):
         A_half_inv = matrix_sqrth(A_inv)
         A_half = np.linalg.inv(A_half_inv)
         ans = A_half @ matrix_sqrth(A_half_inv @ B @ A_half_inv) @ A_half
-    elif FLAG_CupyEigh_Enabled:
-        A_half_inv = matrix_sqrt_for_cupy_HermitianMatrix(A_inv)
-        A_half = inv_gpu_batch(A_half_inv)
-        ans = A_half @ matrix_sqrt_for_cupy_HermitianMatrix(A_half_inv @ B @ A_half_inv) @ A_half
     else:
         A_half_inv = matrix_sqrth(cuda.to_cpu(A_inv))
         A_half = np.linalg.inv(A_half_inv)

@@ -9,20 +9,10 @@ import matplotlib.pyplot as pl
 import sys, os
 import pickle as pic
 
-sys.path.append("../CupyLibrary")
 try:
     from chainer import cuda
-    FLAG_GPU_Available = True
 except:
     print("---Warning--- You cannot use GPU acceleration because chainer or cupy is not installed")
-    FLAG_GPU_Available = False
-
-try:
-    from cupy_matrix_inverse import inv_gpu_batch
-    FLAG_CupyInverse_Enabled = True
-except:
-    print("---Warning--- You cannot use special cupy functions")
-    FLAG_CupyInverse_Enabled = False
 
 from configure import *
 
@@ -37,7 +27,7 @@ class ILRMA:
     SeparationMatrix_FMM: separation matrices
     """
 
-    def __init__(self, n_basis=2, xp=np, init_SCM="unit"):
+    def __init__(self, n_basis=2, xp=np, init_SCM="unit", n_bit=64, seed=0):
         """ initialize ILRMA
 
         Parameters:
@@ -48,11 +38,22 @@ class ILRMA:
                 how to initialize covariance matrix {unit, obs}
             xp: numpy or cupy
         """
+        self.method_name = "ILRMA"
         self.n_basis = n_basis
         self.init_SCM = init_SCM
         self.xp = xp
-        self.calculateInverseMatrix = self.return_InverseMatrixCalculationMethod()
-        self.method_name = "ILRMA"
+        self.xp.random.seed(seed)
+        np.random.seed(seed)
+
+        self.n_bit = n_bit
+        if self.n_bit == 32:
+            self.TYPE_FLOAT = self.xp.float32
+            self.TYPE_COMPLEX = self.xp.complex64
+        elif self.n_bit == 64:
+            self.TYPE_FLOAT = self.xp.float64
+            self.TYPE_COMPLEX = self.xp.complex128
+        else:
+            raise ValueError("n_bit must be 32 or 64")
 
 
     def load_spectrogram(self, X_FTM):
@@ -65,28 +66,8 @@ class ILRMA:
         """
         self.n_freq, self.n_time, self.n_mic = X_FTM.shape
         self.n_source = self.n_mic
-        self.X_FTM = self.xp.asarray(X_FTM, dtype=self.xp.complex)
+        self.X_FTM = self.xp.asarray(X_FTM, dtype=self.TYPE_COMPLEX)
         self.XX_FTMM = self.X_FTM[:, :, :, None] @ self.X_FTM[:, :, None, :].conj()
-
-
-    def set_parameter(self, n_iteration=None, init_SCM=None, n_basis=None):
-        """ set parameters
-
-        Parameters:
-        -----------
-            n_iteration: int
-                the number of iterations
-            n_basis: int
-                the number of basis
-            init_SCM: str
-                how to initialize covariance matrix {unit, obs}
-        """
-        if n_iteration != None:
-            self.n_iteration = n_iteration
-        if n_basis != None:
-            self.n_basis = n_basis
-        if init_SCM != None:
-            self.init_SCM = init_SCM
 
 
     def convert_to_NumpyArray(self, data):
@@ -96,40 +77,26 @@ class ILRMA:
             return cuda.to_cpu(data)
 
 
-    def return_InverseMatrixCalculationMethod(self):
-        if self.xp == np:
-            return np.linalg.inv
-        elif FLAG_CupyInverse_Enabled:
-            return inv_gpu_batch
-        else:
-            return lambda x: cuda.to_gpu(np.linalg.inv(self.convert_to_NumpyArray(x)))
-
-
     def initialize_PSD(self):
-        power_observation_FT = (self.xp.abs(self.X_FTM).astype(self.xp.float) ** 2).mean(axis=2)
-        shape = 2
-        self.W_NFK = self.xp.random.gamma(shape, 1 / self.n_freq / shape, size=[self.n_source, self.n_freq, self.n_basis])
-        self.W_NFK[self.W_NFK < EPS] = EPS
-        self.W_NFK = self.W_NFK / self.W_NFK.sum(axis=1)[:, None]
-        self.H_NKT = self.xp.random.gamma(shape, (power_observation_FT.mean() * self.n_freq * self.n_mic / (self.n_source * self.n_basis)) / shape, size=[self.n_source, self.n_basis, self.n_time])
-        self.H_NKT[self.H_NKT < EPS] = EPS
+        self.W_NFK = self.xp.random.rand(self.n_source, self.n_freq, self.n_basis).astype(self.TYPE_FLOAT)
+        self.H_NKT = self.xp.random.rand(self.n_source, self.n_basis, self.n_time).astype(self.TYPE_FLOAT)
         self.lambda_NFT = self.W_NFK @ self.H_NKT
 
 
     def initialize_covarianceMatrix(self):
         if "unit" in self.init_SCM:
-            mixing_matrix_FMM = self.xp.tile(self.xp.eye(self.n_mic), [self.n_freq, 1, 1]).astype(self.xp.complex)
+            mixing_matrix_FMM = self.xp.tile(self.xp.eye(self.n_mic), [self.n_freq, 1, 1]).astype(self.TYPE_COMPLEX)
         elif "obs" in self.init_SCM:
             power_observation = (self.xp.abs(self.X_FTM).astype(self.xp.float32) ** 2).mean(axis=2) # F T
 
             eig_val, eig_vector = np.linalg.eig(self.convert_to_NumpyArray(self.XX_FTMM.sum(axis=1) / power_observation.sum(axis=1)[:, None, None]  ))
-            eig_vector = self.xp.asarray(eig_vector).astype(self.xp.complex)
-            mixing_matrix_FMM = self.xp.zeros([self.n_freq, self.n_mic, self.n_mic], dtype=self.xp.complex)
-            mixing_matrix_FMM[:] = self.xp.eye(self.n_mic).astype(self.xp.complex)
+            eig_vector = self.xp.asarray(eig_vector).astype(self.TYPE_COMPLEX)
+            mixing_matrix_FMM = self.xp.zeros([self.n_freq, self.n_mic, self.n_mic], dtype=self.TYPE_COMPLEX)
+            mixing_matrix_FMM[:] = self.xp.eye(self.n_mic).astype(self.TYPE_COMPLEX)
             for f in range(self.n_freq):
                 mixing_matrix_FMM[f, :, 0] = eig_vector[f, :, eig_val[f].argmax()]
 
-        self.SeparationMatrix_FMM = self.calculateInverseMatrix(mixing_matrix_FMM)
+        self.SeparationMatrix_FMM = self.xp.linalg.inv(mixing_matrix_FMM)
         self.normalize()
 
 
@@ -186,10 +153,11 @@ class ILRMA:
     def make_filename_suffix(self):
         self.filename_suffix = "it={}-L={}-init={}".format(self.n_iteration, self.n_basis, self.init_SCM)
 
+        if self.n_bit != 64:
+            self.filename_suffix += f"-bit={self.n_bit}"
         if hasattr(self, "file_id"):
            self.filename_suffix += "-ID={}".format(self.file_id)
-        else:
-            print("====================\n\nWarning: Please set self.file_id\n\n====================")
+        print("param:", self.filename_suffix)
 
 
     def update_SeparationMatrix(self):
@@ -202,7 +170,7 @@ class ILRMA:
         """
         for m in range(self.n_mic):
             V_FMM = (self.XX_FTMM / self.lambda_NFT[m, :, :, None, None]).mean(axis=1)
-            tmp_FM = self.calculateInverseMatrix(self.SeparationMatrix_FMM @ V_FMM)[:, :, m]
+            tmp_FM = self.xp.linalg.inv(self.SeparationMatrix_FMM @ V_FMM)[:, :, m]
             self.SeparationMatrix_FMM[:, m] = (tmp_FM / self.xp.sqrt(( (tmp_FM.conj()[:, :, None] * V_FMM).sum(axis=1) * tmp_FM).sum(axis=1) )[:, None]).conj()
 
 
@@ -246,15 +214,15 @@ class ILRMA:
 
 
     def normalize(self):
-        mu_NF = self.xp.zeros([self.n_mic, self.n_freq])
+        mu_NF = self.xp.zeros([self.n_mic, self.n_freq], dtype=self.TYPE_FLOAT)
         for m in range(self.n_mic):
             mu_NF[m] = (self.SeparationMatrix_FMM[:, m] * self.SeparationMatrix_FMM[:, m].conj()).sum(axis=1).real
-            self.SeparationMatrix_FMM[:, m] = self.SeparationMatrix_FMM[:, m] / self.xp.sqrt(mu_NF[m, :, None])
-        self.W_NFK = self.W_NFK / mu_NF[:, :, None]
+            self.SeparationMatrix_FMM[:, m] /= self.xp.sqrt(mu_NF[m, :, None])
+        self.W_NFK /= mu_NF[:, :, None]
 
         nu_NnK = self.W_NFK.sum(axis=1)
-        self.W_NFK = self.W_NFK / nu_NnK[:, None]
-        self.H_NKT = self.H_NKT * nu_NnK[:, :, None]
+        self.W_NFK /= nu_NnK[:, None]
+        self.H_NKT *= nu_NnK[:, :, None]
 
         self.lambda_NFT = self.W_NFK @ self.H_NKT
         self.reset_variable()
@@ -286,21 +254,21 @@ class ILRMA:
         """
         self.Y_FTN = ( self.SeparationMatrix_FMM[:, None] @ self.X_FTM[:, :, :, None] ).squeeze()
         if source_index == None:
-            self.separated_spec = self.xp.zeros([self.n_mic, self.n_freq, self.n_time], dtype=self.xp.complex)
+            self.separated_spec = self.xp.zeros([self.n_mic, self.n_freq, self.n_time], dtype=self.TYPE_COMPLEX)
             for n in range(self.n_mic):
-                self.separated_spec[n] = self.Y_FTN[:, :, n] * self.calculateInverseMatrix(self.SeparationMatrix_FMM)[:, None, mic_index, n]
+                self.separated_spec[n] = self.Y_FTN[:, :, n] * self.xp.linalg.inv(self.SeparationMatrix_FMM)[:, None, mic_index, n]
         else:
-            self.separated_spec = self.Y_FTN[:, :, source_index] @ self.calculateInverseMatrix(self.SeparationMatrix_FMM)[:, None, mic_index, source_index]
+            self.separated_spec = self.Y_FTN[:, :, source_index] @ self.xp.linalg.inv(self.SeparationMatrix_FMM)[:, None, mic_index, source_index]
         return self.separated_spec # N F T or F T
 
 
-    def save_separated_signal(self, save_fileName="sample.wav"):
+    def save_separated_signal(self, save_filename="sample.wav"):
         separated_spec = self.convert_to_NumpyArray(self.separated_spec)
         hop_length = int((self.n_freq - 1) / 2)
         if separated_spec.ndim == 2:
             separated_signal = librosa.core.istft(separated_spec, hop_length=hop_length)
             separated_signal /= np.abs(separated_signal).max() * 1.2
-            sf.write(save_fileName, separated_signal, 16000)
+            sf.write(save_filename, separated_signal, 16000)
         elif separated_spec.ndim == 3:
             for n in range(self.n_source):
                 tmp = librosa.core.istft(separated_spec[n, :, :], hop_length=hop_length)
@@ -308,7 +276,7 @@ class ILRMA:
                     separated_signal = np.zeros([self.n_source, len(tmp)])
                 separated_signal[n] = tmp
             separated_signal /= np.abs(separated_signal).max() * 1.2
-            sf.write(save_fileName, separated_signal.T, 16000)
+            sf.write(save_filename, separated_signal.T, 16000)
 
 
     def save_parameter(self, filename):
@@ -338,13 +306,14 @@ class ILRMA:
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument( 'input_fileName', type= str, help='filename of the multichannel observed signals')
+    parser.add_argument( 'input_filename', type= str, help='filename of the multichannel observed signals')
     parser.add_argument(      '--file_id', type= str, default="None", help='file id')
     parser.add_argument(          '--gpu', type= int, default=     0, help='GPU ID')
     parser.add_argument(        '--n_fft', type= int, default=  1024, help='number of frequencies')
-    parser.add_argument(    '--n_basis', type= int, default=     4, help='number of basis of noise (MODE_noise=NMF)')
-    parser.add_argument('--n_iteration', type= int, default=    30, help='number of iteration')
-    parser.add_argument( '--init_SCM', type=str, default="obs", help='unit, obs')
+    parser.add_argument(      '--n_basis', type= int, default=     4, help='number of basis of noise (MODE_noise=NMF)')
+    parser.add_argument(  '--n_iteration', type= int, default=    30, help='number of iteration')
+    parser.add_argument(     '--init_SCM', type= str, default= "obs", help='unit, obs')
+    parser.add_argument(        '--n_bit', type= int, default=    64, help='number of bits for floating point number')
     args = parser.parse_args()
 
     if args.gpu < 0:
@@ -354,7 +323,7 @@ if __name__ == "__main__":
         print("Use GPU " + str(args.gpu))
         cuda.get_device_from_id(args.gpu).use()
 
-    wav, fs = sf.read(args.input_fileName)
+    wav, fs = sf.read(args.input_filename)
     wav = wav.T
     M = len(wav)
     for m in range(M):
@@ -363,7 +332,7 @@ if __name__ == "__main__":
             spec = np.zeros([tmp.shape[0], tmp.shape[1], M], dtype=np.complex)
         spec[:, :, m] = tmp
 
-    separater = ILRMA(n_basis=args.n_basis, xp=xp, init_SCM=args.init_SCM)
+    separater = ILRMA(n_basis=args.n_basis, xp=xp, init_SCM=args.init_SCM, n_bit=args.n_bit, seed=0)
     separater.load_spectrogram(spec)
     separater.file_id = args.file_id
     separater.solve(n_iteration=args.n_iteration, save_wav=False, save_likelihood=False, save_path="./", save_parameter=False, interval_save_parameter=100)

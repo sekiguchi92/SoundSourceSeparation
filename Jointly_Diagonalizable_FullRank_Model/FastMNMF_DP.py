@@ -33,7 +33,8 @@ class FastMNMF_DP(FastFCA):
     Y_FTM: \sum_n lambda_NFT G_NFM
     """
 
-    def __init__(self, speech_VAE=None, n_noise=1, n_Z_iteration=30, n_latent=16, n_basis_noise=2, xp=np, init_SCM="unit", mode_update_Z="sampling", normalize_encoder_input=True):
+    def __init__(self, speech_VAE=None, n_noise=1, n_Z_iteration=30, n_latent=16, n_basis_noise=2, xp=np, init_SCM="circular",\
+            mode_update_Z="sampling", normalize_encoder_input=True, n_bit=64, seed=0):
         """ initialize FastMNMF_DP
 
         Parameters:
@@ -47,11 +48,22 @@ class FastMNMF_DP(FastFCA):
             n_basis_noise: int
                 the number of bases of each noise source
             init_SCM: str
-                how to initialize covariance matrix {unit, obs, ILRMA}
+                How to initialize covariance matrix {circular, gradual, obs, ILRMA}
+                About circular and gradual initialization, please check my paper:
+                    Kouhei Sekiguchi, Yoshiaki Bando, Aditya Arie Nugraha, Kazuyoshi Yoshii, Tatsuya Kawahara:
+                    Fast Multichannel Nonnegative Matrix Factorization with Directivity-Aware
+                        Jointly-Diagonalizable Spatial Covariance Matrices for Blind Source Separation,
+                    IEEE/ACM Transactions on Audio, Speech, and Language Processing, accepted, 2020.
+            n_bit:int (32 or 64)
+                The number of bits for floating point number.
+                '32' may degrade the peformance in exchange for lower computational cost.
+                32 -> float32 and complex64
+                64 -> float64 and complex128
             mode_update_Z: str
                 how to update latent variable Z {sampling, backprop}
         """
-        super(FastMNMF_DP, self).__init__(n_source=n_noise+1, xp=xp, init_SCM=init_SCM)
+        super(FastMNMF_DP, self).__init__(n_source=n_noise+1, xp=xp, init_SCM=init_SCM, n_bit=n_bit, seed=seed)
+        self.method_name = "FastMNMF_DP"
         self.n_source, self.n_speech, self.n_noise = n_noise+1, 1, n_noise
         self.speech_VAE = speech_VAE
         self.n_Z_iteration = n_Z_iteration
@@ -59,56 +71,20 @@ class FastMNMF_DP(FastFCA):
         self.n_latent = n_latent
         self.mode_update_Z = mode_update_Z
         self.normalize_encoder_input = normalize_encoder_input
-        self.method_name = "FastMNMF_DP"
-
-
-    def set_parameter(self, n_noise=None, n_iteration=None, n_Z_iteration=None, n_basis_noise=None, init_SCM=None, mode_update_Z=None):
-        """ set parameters
-
-        Parameters:
-        -----------
-            n_noise: int
-                the number of sources
-            n_iteration: int
-                the number of iteration
-            n_Z_iteration: int
-                the number of iteration of updating Z in each iteration
-            n_basis_noise: int
-                the number of basis of noise sources
-            init_SCM: str
-                how to initialize covariance matrix {unit, obs, ILRMA}
-            mode_update_Z: str
-                how to update latent variable Z {sampling, backprop}
-        """
-        if n_noise != None:
-            self.n_noise = n_noise
-            self.n_source = n_noise + 1
-        if n_iteration != None:
-            self.n_iteration = n_iteration
-        if n_Z_iteration != None:
-            self.n_Z_iteration = n_Z_iteration
-        if n_basis_noise != None:
-            self.n_basis_noise = n_basis_noise
-        if init_SCM != None:
-            self.init_SCM = init_SCM
-        if mode_update_Z != None:
-            self.mode_update_Z = mode_update_Z
 
 
     def initialize_PSD(self):
-        """ 
+        """
         initialize parameters related to power spectral density (PSD)
         W, H, U, V, Z
         """
+        self.W_noise_NnFK = self.xp.random.rand(self.n_noise, self.n_freq, self.n_basis_noise).astype(self.TYPE_FLOAT)
+        self.H_noise_NnKT = self.xp.random.rand(self.n_noise, self.n_basis_noise, self.n_time).astype(self.TYPE_FLOAT)
+
+        self.U_F = self.xp.ones(self.n_freq, dtype=self.TYPE_FLOAT) / self.n_freq
+        self.V_T = self.xp.ones(self.n_time, dtype=self.TYPE_FLOAT)
+
         power_observation_FT = (self.xp.abs(self.X_FTM) ** 2).mean(axis=2)
-        shape = 2
-        self.W_noise_NnFK = self.xp.random.dirichlet(np.ones(self.n_freq)*shape, size=[self.n_noise, self.n_basis_noise]).transpose(0, 2, 1)
-        self.H_noise_NnKT = self.xp.random.gamma(shape, (power_observation_FT.mean() * self.n_freq * self.n_mic / (self.n_noise * self.n_basis_noise)) / shape, size=[self.n_noise, self.n_basis_noise, self.n_time])
-        self.H_noise_NnKT[self.H_noise_NnKT < EPS] = EPS
-
-        self.U_F = self.xp.ones(self.n_freq) / self.n_freq
-        self.V_T = self.xp.ones(self.n_time)
-
         if self.normalize_encoder_input:
             power_observation_FT = power_observation_FT / power_observation_FT.sum(axis=0).mean()
 
@@ -117,23 +93,22 @@ class FastMNMF_DP(FastFCA):
         self.z_optimizer_speech = chainer.optimizers.Adam().setup(self.z_link_speech)
         self.power_speech_FT = self.speech_VAE.decode_cupy(self.Z_speech_DT)
 
-        self.lambda_NFT = self.xp.zeros([self.n_source, self.n_freq, self.n_time])
+        self.lambda_NFT = self.xp.zeros([self.n_source, self.n_freq, self.n_time], dtype=self.TYPE_FLOAT)
         self.lambda_NFT[0] = self.U_F[:, None] * self.V_T[None] * self.power_speech_FT
         self.lambda_NFT[1:] = self.W_noise_NnFK @ self.H_noise_NnKT
 
 
-    def make_fileName_suffix(self):
-        self.fileName_suffix = "S={}-it={}-itZ={}-Ln={}-D={}-init={}-latent={}".format(self.n_source, self.n_iteration, self.n_Z_iteration, self.n_basis_noise, self.n_latent, self.init_SCM, self.mode_update_Z)
+    def make_filename_suffix(self):
+        self.filename_suffix = f"S={self.n_source}-it={self.n_iteration}-itZ={self.n_Z_iteration}" \
+            + f"-Ln={self.n_basis_noise}-D={self.n_latent}-init={self.init_SCM}-latent={self.mode_update_Z}"
 
         if hasattr(self, "name_DNN"):
-            self.fileName_suffix += "-DNN={}".format(self.name_DNN)
-
+            self.filename_suffix += f"-DNN={self.name_DNN}"
+        if self.n_bit != 64:
+            self.filename_suffix += f"-bit={self.n_bit}"
         if hasattr(self, "file_id"):
-            self.fileName_suffix += "-ID={}".format(self.file_id)
-        else:
-            print("====================\n\nWarning: Please set self.file_id\n\n====================")
-
-        print("parameter:", self.fileName_suffix)
+            self.filename_suffix += f"-ID={self.file_id}"
+        print("param:", self.filename_suffix)
 
 
     def update(self):
@@ -147,22 +122,22 @@ class FastMNMF_DP(FastFCA):
 
     def normalize(self):
         phi_F = self.xp.sum(self.Q_FMM * self.Q_FMM.conj(), axis=(1, 2)).real / self.n_mic
-        self.Q_FMM = self.Q_FMM / self.xp.sqrt(phi_F)[:, None, None]
-        self.G_NFM = self.G_NFM / phi_F[None, :, None]
+        self.Q_FMM /= self.xp.sqrt(phi_F)[:, None, None]
+        self.G_NFM /= phi_F[None, :, None]
 
         mu_NF = (self.G_NFM).sum(axis=2).real
-        self.G_NFM = self.G_NFM / mu_NF[:, :, None]
-        self.U_F = self.U_F * mu_NF[0]
-        self.W_noise_NnFK = self.W_noise_NnFK * mu_NF[1:][:, :, None]
+        self.G_NFM /= mu_NF[:, :, None]
+        self.U_F *= mu_NF[0]
+        self.W_noise_NnFK *= mu_NF[1:][:, :, None]
 
         nu = self.U_F.sum()
-        self.U_F = self.U_F / nu
-        self.V_T = nu * self.V_T
+        self.U_F /= nu
+        self.V_T *= nu
         self.lambda_NFT[0] = self.U_F[:, None] * self.V_T[None] * self.power_speech_FT
 
         nu_NnK = self.W_noise_NnFK.sum(axis=1)
-        self.W_noise_NnFK = self.W_noise_NnFK / nu_NnK[:, None]
-        self.H_noise_NnKT = self.H_noise_NnKT * nu_NnK[:, :, None]
+        self.W_noise_NnFK /= nu_NnK[:, None]
+        self.H_noise_NnKT *= nu_NnK[:, :, None]
         self.lambda_NFT[1:] = self.W_noise_NnFK @ self.H_noise_NnKT + EPS
 
         self.reset_variable()
@@ -175,8 +150,8 @@ class FastMNMF_DP(FastFCA):
         b_W = (self.H_noise_NnKT[:, None] * tmp2_NnFT[:, :, None]).sum(axis=3)
         a_H = (self.W_noise_NnFK[..., None] * tmp1_NnFT[:, :, None] ).sum(axis=1) # N F K T M
         b_H = (self.W_noise_NnFK[..., None] * tmp2_NnFT[:, :, None]).sum(axis=1) # N F K T M
-        self.W_noise_NnFK = self.W_noise_NnFK * self.xp.sqrt(a_W / b_W)
-        self.H_noise_NnKT = self.H_noise_NnKT * self.xp.sqrt(a_H / b_H)
+        self.W_noise_NnFK *= self.xp.sqrt(a_W / b_W)
+        self.H_noise_NnKT *= self.xp.sqrt(a_H / b_H)
 
         self.lambda_NFT[1:] = self.W_noise_NnFK @ self.H_noise_NnKT + EPS
         self.Y_FTM = (self.lambda_NFT[..., None] * self.G_NFM[:, :, None]).sum(axis=0)
@@ -185,13 +160,13 @@ class FastMNMF_DP(FastFCA):
     def update_UV(self):
         a_1 = ((self.V_T[None] * self.power_speech_FT)[:, :, None] * self.Qx_power_FTM * self.G_NFM[0, :, None] / (self.Y_FTM ** 2)).sum(axis=2).sum(axis=1).real
         b_1 = ((self.V_T[None] * self.power_speech_FT)[:, :, None] * self.G_NFM[0, :, None] / self.Y_FTM).sum(axis=2).sum(axis=1).real
-        self.U_F = self.U_F * self.xp.sqrt(a_1 / b_1)
+        self.U_F *= self.xp.sqrt(a_1 / b_1)
         self.lambda_NFT[0] = self.U_F[:, None] * self.V_T[None] * self.power_speech_FT
         self.Y_FTM = (self.lambda_NFT[..., None] * self.G_NFM[:, :, None]).sum(axis=0)
 
         a_1 = ((self.U_F[:, None] * self.power_speech_FT)[:, :, None] * self.Qx_power_FTM * self.G_NFM[0, :, None] / (self.Y_FTM ** 2)).sum(axis=2).sum(axis=0).real
         b_1 = ((self.U_F[:, None] * self.power_speech_FT)[:, :, None] * self.G_NFM[0, :, None] / self.Y_FTM).sum(axis=2).sum(axis=0).real
-        self.V_T = self.V_T * self.xp.sqrt(a_1 / b_1)
+        self.V_T *= self.xp.sqrt(a_1 / b_1)
         self.lambda_NFT[0] = self.U_F[:, None] * self.V_T[None] * self.power_speech_FT
         self.Y_FTM = (self.lambda_NFT[..., None] * self.G_NFM[:, :, None]).sum(axis=0)
 
@@ -246,15 +221,15 @@ class FastMNMF_DP(FastFCA):
         self.Y_FTM = (self.lambda_NFT[..., None] * self.G_NFM[:, :, None]).sum(axis=0)
 
 
-    def save_parameter(self, fileName):
+    def save_parameter(self, filename):
         param_list = [self.lambda_NFT, self.G_NFM, self.Q_FMM, self.U_F, self.V_T, self.Z_speech_DT, self.W_noise_NnFK, self.H_noise_NnKT]
         if self.xp != np:
             param_list = [self.convert_to_NumpyArray(param) for param in param_list]
-        pic.dump(param_list, open(fileName, "wb"))
+        pic.dump(param_list, open(filename, "wb"))
 
 
-    def load_parameter(self, fileName):
-        param_list = pic.load(open(fileName, "rb"))
+    def load_parameter(self, filename):
+        param_list = pic.load(open(filename, "rb"))
         if self.xp != np:
             param_list = [cuda.to_gpu(param) for param in param_list]
         self.lambda_NFT, self.G_NFM, self.Q_FMM, self.U_F, self.V_T, self.Z_speech_DT, self.W_noise_NnFK, self.H_noise_NnKT = param_list
@@ -276,16 +251,17 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument( 'input_fileName', type= str, help='filename of the multichannel observed signals')
+    parser.add_argument( 'input_filename', type= str, help='filename of the multichannel observed signals')
     parser.add_argument(      '--file_id', type= str, default="None", help='file id')
     parser.add_argument(          '--gpu', type= int, default=     0, help='GPU ID')
     parser.add_argument(     '--n_latent', type= int, default=    16, help='dimention of encoded vector')
     parser.add_argument(      '--n_noise', type= int, default=     1, help='number of noise')
     parser.add_argument('--n_basis_noise', type= int, default=    64, help='number of basis of noise (MODE_noise=NMF)')
-    parser.add_argument(     '--init_SCM', type= str, default= "obs", help='unit, obs, ILRMA')
+    parser.add_argument(     '--init_SCM', type= str, default= "obs", help='obs (for speech enhancement)')
     parser.add_argument(  '--n_iteration', type= int, default=   100, help='number of iteration')
     parser.add_argument('--n_Z_iteration', type= int, default=    30, help='number of update Z iteration')
     parser.add_argument('--mode_update_Z', type= str, default="sampling", help='sampling, sampling2, backprop, backprop2, hybrid, hybrid2')
+    parser.add_argument(        '--n_bit', type= int, default=    64, help='number of bits for floating point number')
     args = parser.parse_args()
 
     if args.gpu < 0:
@@ -297,15 +273,15 @@ if __name__ == "__main__":
 
     sys.path.append("../DeepSpeechPrior")
     import network_VAE
-    model_fileName = "../DeepSpeechPrior/model-VAE-best-scale=gamma-D={}.npz".format(args.n_latent)
+    model_filename = "../DeepSpeechPrior/model-VAE-best-scale=gamma-D={}.npz".format(args.n_latent)
     speech_VAE = network_VAE.VAE(n_latent=args.n_latent)
-    serializers.load_npz(model_fileName, speech_VAE)
+    serializers.load_npz(model_filename, speech_VAE)
     name_DNN = "VAE"
 
     if xp != np:
         speech_VAE.to_gpu()
 
-    wav, fs = sf.read(args.input_fileName)
+    wav, fs = sf.read(args.input_filename)
     wav = wav.T
     M = len(wav)
     for m in range(M):
@@ -314,7 +290,7 @@ if __name__ == "__main__":
             spec = np.zeros([tmp.shape[0], tmp.shape[1], M], dtype=np.complex)
         spec[:, :, m] = tmp
 
-    separater = FastMNMF_DP(n_noise=args.n_noise, speech_VAE=speech_VAE, n_Z_iteration=args.n_Z_iteration, n_basis_noise=args.n_basis_noise, xp=xp, init_SCM=args.init_SCM, mode_update_Z=args.mode_update_Z)
+    separater = FastMNMF_DP(n_noise=args.n_noise, speech_VAE=speech_VAE, n_Z_iteration=args.n_Z_iteration, n_basis_noise=args.n_basis_noise, xp=xp, init_SCM=args.init_SCM, mode_update_Z=args.mode_update_Z, n_bit=args.n_bit, seed=0)
     separater.load_spectrogram(spec)
     separater.file_id = args.file_id
     separater.name_DNN = name_DNN
