@@ -7,14 +7,14 @@ Tools for multi-channel speech enhancement (and source separation)
 IEEE/ACM Transactions on Audio, Speech, and Language Processing, 2020.  
 This paper is about the extension of FastMNMF, called FastMNMF2.
 
-- I added new initialization method for FastMNMF called gradual initialization proposed in the paper above.
+- I added new initialization method for FastMNMF called gradual initialization method proposed in the paper above.
 ```
 python3 FastMNMF.py [input_filename] --init_SCM gradual
 ```
 
 - I added new option "n_bit" to jointly-diagonalizable full-rank models (e.g. FastMNMF) and rank-1 models.
 You can set the number of bits to 32 or 64 (32-> float32 and complex64, 64->float64 and complex128, default is 64).
-By using 32, you can reduce computational cost in exchange for the performance.
+By using 32, you can reduce computational cost and memory usage in exchange for the performance.
 Especially when the number of microphones is large, the performance is likely to degrade.
 Moreover, when you are using simulated signals without reverberation, since the mixture SCM is likely to be rank-deficient,
 please add some noise to the simulated signals (as in FastMNMF.py).
