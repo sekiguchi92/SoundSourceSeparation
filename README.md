@@ -7,7 +7,7 @@ Tools for multi-channel sound source separation and speech enhancement
 IEEE/ACM Transactions on Audio, Speech, and Language Processing, 2020.  
 This paper is about the extension of FastMNMF, called FastMNMF2.
 
-- I added new initialization method for FastMNMF called gradual initialization method proposed in the paper above.
+- I added new initialization method for FastMNMF called gradual initialization proposed in the paper above.
 ```
 python3 FastMNMF.py [input_filename] --init_SCM gradual
 ```
@@ -19,7 +19,7 @@ Especially when the number of microphones is large, the performance is likely to
 Moreover, when you are using simulated signals without reverberation, since the mixture SCM is likely to be rank-deficient,
 please add some noise to the simulated signals (as in FastMNMF.py).
 
-- I removed "CupyLibrary" directory because now cupy.linalg.inv is available for complex values. Please use the latest version of Cupy.
+- I removed "CupyLibrary" directory because now cupy.linalg.inv supports complex values. Please use the latest version of Cupy.
 
 ## FullRank Model
 FullRank_Model includes 3 methods called Full-rank Spatial Covariance Analysis (FCA), Multichannel Nonnegative Matrix Factorization(MNMF), MNMF with a deep prior (MNMF-DP).  
