@@ -33,20 +33,20 @@ class FastMNMF_DP(FastFCA):
     Y_FTM: \sum_n lambda_NFT G_NFM
     """
 
-    def __init__(self, speech_VAE=None, n_noise=1, n_Z_iteration=30, n_latent=16, n_basis_noise=2, xp=np, init_SCM="circular",\
-            mode_update_Z="sampling", normalize_encoder_input=True, n_bit=64, seed=0):
+    def __init__(self, speech_VAE=None, n_noise=1, n_Z_iteration=30, n_latent=16, n_basis_noise=2, xp=np, \
+            init_SCM="circular", mode_update_Z="sampling", normalize_encoder_input=True, n_bit=64, seed=0):
         """ initialize FastMNMF_DP
 
         Parameters:
         -----------
             n_noise: int
-                the number of noise sources
+                The number of noise sources
             speech_VAE: VAE
-                trained speech VAE network (necessary if you use VAE as speech model)
+                Trained speech VAE network (necessary if you use VAE as speech model)
             n_latent: int
-                the dimension of latent variable Z
+                The dimension of latent variable Z
             n_basis_noise: int
-                the number of bases of each noise source
+                The number of bases of each noise source
             init_SCM: str
                 How to initialize covariance matrix {circular, gradual, obs, ILRMA}
                 About circular and gradual initialization, please check my paper:
@@ -54,13 +54,17 @@ class FastMNMF_DP(FastFCA):
                     Fast Multichannel Nonnegative Matrix Factorization with Directivity-Aware
                         Jointly-Diagonalizable Spatial Covariance Matrices for Blind Source Separation,
                     IEEE/ACM Transactions on Audio, Speech, and Language Processing, accepted, 2020.
+            mode_update_Z: str
+                How to update latent variable Z {sampling, backprop}
+            normalize_encoder_input: boolean
+                Whether observation X is normalized or not
+                When the latent variable Z is initialized with the output of VAE given X.
+                Since the default VAE is trained with normalized data, default is True.
             n_bit:int (32 or 64)
                 The number of bits for floating point number.
                 '32' may degrade the peformance in exchange for lower computational cost.
                 32 -> float32 and complex64
                 64 -> float64 and complex128
-            mode_update_Z: str
-                how to update latent variable Z {sampling, backprop}
         """
         super(FastMNMF_DP, self).__init__(n_source=n_noise+1, xp=xp, init_SCM=init_SCM, n_bit=n_bit, seed=seed)
         self.method_name = "FastMNMF_DP"
@@ -252,16 +256,17 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument( 'input_filename', type= str, help='filename of the multichannel observed signals')
-    parser.add_argument(      '--file_id', type= str, default="None", help='file id')
-    parser.add_argument(          '--gpu', type= int, default=     0, help='GPU ID')
-    parser.add_argument(     '--n_latent', type= int, default=    16, help='dimention of encoded vector')
-    parser.add_argument(      '--n_noise', type= int, default=     1, help='number of noise')
-    parser.add_argument('--n_basis_noise', type= int, default=    64, help='number of basis of noise (MODE_noise=NMF)')
-    parser.add_argument(     '--init_SCM', type= str, default= "obs", help='obs (for speech enhancement)')
-    parser.add_argument(  '--n_iteration', type= int, default=   100, help='number of iteration')
-    parser.add_argument('--n_Z_iteration', type= int, default=    30, help='number of update Z iteration')
-    parser.add_argument('--mode_update_Z', type= str, default="sampling", help='sampling, sampling2, backprop, backprop2, hybrid, hybrid2')
-    parser.add_argument(        '--n_bit', type= int, default=    64, help='number of bits for floating point number')
+    parser.add_argument(      '--file_id', type= str, default=    "None", help='file id')
+    parser.add_argument(          '--gpu', type= int, default=         0, help='GPU ID')
+    parser.add_argument(     '--n_latent', type= int, default=        16, help='dimention of encoded vector')
+    parser.add_argument(      '--n_noise', type= int, default=         1, help='number of noise')
+    parser.add_argument('--n_basis_noise', type= int, default=        64, help='number of basis of noise (MODE_noise=NMF)')
+    parser.add_argument(     '--init_SCM', type= str, default=     "obs", help='obs (for speech enhancement)')
+    parser.add_argument(  '--n_iteration', type= int, default=       100, help='number of iteration')
+    parser.add_argument('--n_Z_iteration', type= int, default=        30, help='number of update Z iteration')
+    parser.add_argument('--mode_update_Z', type= str, default="sampling", help='sampling, backprop')
+    parser.add_argument(        '--n_mic', type= int, default=         8, help='number of microphones')
+    parser.add_argument(        '--n_bit', type= int, default=        64, help='number of bits for floating point number')
     args = parser.parse_args()
 
     if args.gpu < 0:
@@ -273,7 +278,7 @@ if __name__ == "__main__":
 
     sys.path.append("../DeepSpeechPrior")
     import network_VAE
-    model_filename = "../DeepSpeechPrior/model-VAE-best-scale=gamma-D={}.npz".format(args.n_latent)
+    model_filename = f"../DeepSpeechPrior/model-VAE-best-scale=gamma-D={args.n_latent}.npz"
     speech_VAE = network_VAE.VAE(n_latent=args.n_latent)
     serializers.load_npz(model_filename, speech_VAE)
     name_DNN = "VAE"
@@ -283,7 +288,7 @@ if __name__ == "__main__":
 
     wav, fs = sf.read(args.input_filename)
     wav = wav.T
-    M = len(wav)
+    M = min(args.n_mic, len(wav))
     for m in range(M):
         tmp = librosa.core.stft(wav[m], n_fft=1024, hop_length=256)
         if m == 0:
