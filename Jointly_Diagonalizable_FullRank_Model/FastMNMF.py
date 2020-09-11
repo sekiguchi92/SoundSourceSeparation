@@ -38,11 +38,11 @@ class FastMNMF(FastFCA):
         Parameters:
         -----------
             n_source: int
-                the number of sources
+                The number of sources
             n_iteration: int
-                the number of iteration to update all variables
+                The number of iteration to update all variables
             n_basis: int
-                the number of bases of each source
+                The number of bases of each source
             init_SCM: str
                 How to initialize covariance matrix {circular, gradual, obs, ILRMA}
                 About circular and gradual initialization, please check my paper:
@@ -144,8 +144,8 @@ if __name__ == "__main__":
     parser.add_argument(       '--n_fft', type= int, default=      1024, help='number of frequencies')
     parser.add_argument(    '--n_source', type= int, default=         4, help='number of noise sources')
     parser.add_argument(     '--n_basis', type= int, default=         8, help='number of bases')
-    parser.add_argument(       '--n_mic', type= int, default=     8, help='number of microphones')
-    parser.add_argument(    '--init_SCM', type= str, default="circular", help='circular, gradual, obs, ILRMA')
+    parser.add_argument(       '--n_mic', type= int, default=         8, help='number of microphones')
+    parser.add_argument(    '--init_SCM', type= str, default= "gradual", help='circular, gradual, obs, ILRMA')
     parser.add_argument( '--n_iteration', type= int, default=       100, help='number of iteration')
     parser.add_argument(       '--n_bit', type= int, default=        64, help='number of bits for floating point number')
     args = parser.parse_args()

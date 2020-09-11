@@ -99,9 +99,10 @@ class FastFCA():
         elif "obs" in self.init_SCM:
             mixture_covarianceMatrix_FMM = self.XX_FTMM.sum(axis=1) / (self.xp.trace(self.XX_FTMM, axis1=2, axis2=3).sum(axis=1))[:, None, None]
             eig_val, eig_vec = np.linalg.eigh(self.convert_to_NumpyArray(mixture_covarianceMatrix_FMM))
+            eig_val, eig_vec = eig_val[:, ::-1], eig_vec[:, :, ::-1]
             self.Q_FMM = self.xp.asarray(eig_vec).transpose(0, 2, 1).conj()
-            self.G_NFM = self.xp.ones([self.n_source, self.n_freq, self.n_mic], dtype=self.TYPE_FLOAT) / self.n_mic
-            self.G_NFM[0] = self.xp.asarray(eig_val)
+            self.G_NFM = self.xp.ones([self.n_source, self.n_freq, self.n_mic], dtype=self.TYPE_FLOAT) * 1e-2
+            self.G_NFM[0, :, 0] = 1
         elif "gradual" in self.init_SCM:
             from FastMNMF import FastMNMF
             fastmnmf1 = FastMNMF(n_source=self.n_source, n_basis=2, init_SCM="circular", xp=self.xp, n_bit=self.n_bit)
@@ -207,7 +208,7 @@ class FastFCA():
     def update_CovarianceDiagElement(self):
         a_1 = (self.lambda_NFT[..., None] * (self.Qx_power_FTM / (self.Y_FTM ** 2))[None]).sum(axis=2) # N F T M
         b_1 = (self.lambda_NFT[..., None] / self.Y_FTM[None]).sum(axis=2)
-        self.G_NFM = self.G_NFM * self.xp.sqrt(a_1 / b_1)
+        self.G_NFM *= self.xp.sqrt(a_1 / b_1)
         self.G_NFM += EPS
         self.Y_FTM = (self.lambda_NFT[..., None] * self.G_NFM[:, :, None]).sum(axis=0)
 
@@ -215,7 +216,8 @@ class FastFCA():
     def update_lambda(self):
         a = (self.G_NFM[:, :, None] * (self.Qx_power_FTM / (self.Y_FTM ** 2))[None]).sum(axis=3) # N F T
         b = (self.G_NFM[:, :, None] / self.Y_FTM[None]).sum(axis=3)
-        self.lambda_NFT = self.lambda_NFT * self.xp.sqrt(a / b) + EPS
+        self.lambda_NFT *= self.xp.sqrt(a / b) 
+        self.lambda_NFT += EPS
         self.Y_FTM = (self.lambda_NFT[..., None] * self.G_NFM[:, :, None]).sum(axis=0)
 
 
@@ -246,12 +248,11 @@ class FastFCA():
 
     def separate_FastWienerFilter(self, source_index=None, mic_index=MIC_INDEX):
         Qx_FTM = (self.Q_FMM[:, None] * self.X_FTM[:, :, None]).sum(axis=3)
+        diagonalizer_inv_FMM = self.xp.linalg.inv(self.Q_FMM)
         if source_index != None:
-            diagonalizer_inv_FMM = self.xp.linalg.inv(self.Q_FMM)
             self.separated_spec = self.convert_to_NumpyArray((diagonalizer_inv_FMM[:, None] @ (Qx_FTM * ( (self.lambda_NFT[source_index, :, :, None] * self.G_NFM[source_index, :, None]) / (self.lambda_NFT[..., None]* self.G_NFM[:, :, None]).sum(axis=0) ) )[..., None])[:, :, mic_index, 0])
         else:
             for n in range(self.n_source):
-                diagonalizer_inv_FMM = self.xp.linalg.inv(self.Q_FMM)
                 tmp = self.convert_to_NumpyArray((diagonalizer_inv_FMM[:, None] @ (Qx_FTM * ( (self.lambda_NFT[n, :, :, None] * self.G_NFM[n, :, None]) / (self.lambda_NFT[..., None]* self.G_NFM[:, :, None]).sum(axis=0) ) )[..., None])[:, :, mic_index, 0])
                 if n == 0:
                     self.separated_spec = np.zeros([self.n_source, tmp.shape[0], tmp.shape[1]], dtype=np.complex)
@@ -302,8 +303,9 @@ if __name__ == "__main__":
     parser.add_argument(         '--gpu', type= int, default=         0, help='GPU ID')
     parser.add_argument(       '--n_fft', type= int, default=      1024, help='number of frequencies')
     parser.add_argument(    '--n_source', type= int, default=         2, help='number of noise')
-    parser.add_argument(    '--init_SCM', type= str, default="circular", help='circular, gradual, obs, ILRMA')
+    parser.add_argument(    '--init_SCM', type= str, default= "gradual", help='circular, gradual, obs, ILRMA')
     parser.add_argument( '--n_iteration', type= int, default=       100, help='number of iteration')
+    parser.add_argument(       '--n_mic', type= int, default=         8, help='number of microphones')
     parser.add_argument(       '--n_bit', type= int, default=        64, help='number of bits for floating point number')
     args = parser.parse_args()
 
@@ -316,7 +318,7 @@ if __name__ == "__main__":
 
     wav, fs = sf.read(args.input_filename)
     wav = wav.T
-    M = len(wav)
+    M = min(args.n_mic, len(wav))
     for m in range(M):
         tmp = librosa.core.stft(wav[m], n_fft=args.n_fft, hop_length=int(args.n_fft/4))
         if m == 0:
