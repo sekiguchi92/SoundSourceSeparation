@@ -6,7 +6,6 @@ import chainer
 import sys, os
 from chainer import cuda, serializers
 from chainer import functions as chf
-from progressbar import progressbar
 import librosa
 import soundfile as sf
 import pickle as pic

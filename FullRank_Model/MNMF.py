@@ -3,7 +3,6 @@
 
 import numpy as np
 import sys, os
-from progressbar import progressbar
 import librosa
 import soundfile as sf
 import pickle as pic
