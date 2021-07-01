@@ -5,7 +5,6 @@ import numpy as np
 import chainer
 from chainer import functions as chf
 from chainer import cuda, serializers
-from progressbar import progressbar
 import librosa
 import soundfile as sf
 import sys, os
