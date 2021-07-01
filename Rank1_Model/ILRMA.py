@@ -9,11 +9,6 @@ import matplotlib.pyplot as pl
 import sys, os
 import pickle as pic
 
-try:
-    from chainer import cuda
-except:
-    print("---Warning--- You cannot use GPU acceleration because chainer or cupy is not installed")
-
 from configure import *
 
 
@@ -321,7 +316,7 @@ if __name__ == "__main__":
     else:
         import cupy as xp
         print("Use GPU " + str(args.gpu))
-        cuda.get_device_from_id(args.gpu).use()
+        xp.cuda.Device(args.gpu).use()
 
     wav, fs = sf.read(args.input_filename)
     wav = wav.T

@@ -260,7 +260,7 @@ if __name__ == "__main__":
     else:
         import cupy as xp
         print("Use GPU " + str(args.gpu))
-        cuda.get_device_from_id(args.gpu).use()
+        xp.cuda.Device(args.gpu).use()
 
     wav, fs = sf.read(args.input_fileName)
     wav = wav.T

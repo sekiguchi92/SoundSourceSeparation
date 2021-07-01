@@ -2,7 +2,6 @@
 # coding: utf-8
 
 import numpy as np
-import chainer
 import sys, os
 import librosa
 import soundfile as sf
@@ -11,12 +10,6 @@ import pickle as pic
 
 from configure_FastModel import *
 from FastFCA import FastFCA
-
-try:
-    from chainer import cuda
-    FLAG_GPU_Available = True
-except:
-    print("---Warning--- You cannot use GPU acceleration because chainer or cupy is not installed")
 
 
 class FastMNMF(FastFCA):
@@ -155,7 +148,7 @@ if __name__ == "__main__":
     else:
         import cupy as xp
         print("Use GPU " + str(args.gpu))
-        cuda.get_device_from_id(args.gpu).use()
+        xp.cuda.Device(args.gpu).use()
 
     wav, fs = sf.read(args.input_filename)
     wav = wav.T

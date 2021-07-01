@@ -253,7 +253,7 @@ if __name__ == "__main__":
     else:
         import cupy as xp
         print("Use GPU " + str(args.gpu))
-        chainer.cuda.get_device_from_id(args.gpu).use()
+        xp.cuda.Device(args.gpu).use()
 
     sys.path.append("../DeepSpeechPrior")
     import network_VAE
