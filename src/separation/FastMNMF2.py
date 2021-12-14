@@ -2,9 +2,11 @@
 # coding: utf-8
 
 import sys
+import os
 import numpy as np
+from pathlib import Path
 
-sys.path.append("../")
+sys.path.append(str(Path(os.path.abspath(__file__)).parents[1]))
 from Base import EPS, MIC_INDEX, Base, MultiSTFT
 
 

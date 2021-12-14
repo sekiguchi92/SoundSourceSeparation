@@ -4,7 +4,6 @@
 import numpy as np
 import librosa
 import soundfile as sf
-import h5py
 from tqdm import tqdm
 
 EPS = 1e-10
@@ -196,6 +195,7 @@ class Base:
         sf.write(save_fname, separated_signal, self.sample_rate)
 
     def save_param(self, fname):
+        import h5py
         with h5py.File(fname, "w") as f:
             for param in self.save_param_list:
                 data = getattr(self, param)
@@ -205,6 +205,7 @@ class Base:
             f.flush()
 
     def load_param(self, fname):
+        import h5py
         with h5py.File(fname, "r") as f:
             for key in f.keys():
                 data = f[key]
