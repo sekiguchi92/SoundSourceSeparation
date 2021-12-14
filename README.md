@@ -16,7 +16,7 @@ Tools for multi-channel sound source separation and dereverberation.
 
 ## Requirements
 * Tested on Python3.8  
-* Minimal requirements are:
+* Minimal requirements are listed below
 ```
 numpy (1.19.2 was tested)
 librosa
@@ -25,7 +25,7 @@ tqdm
 ```
 You can install all the packages above with `pip install -r requirements.txt`  
   
-* Optional packages are listed below:
+* Optional packages are listed below
 ```
 cupy # for GPU accelaration (9.4.0 was tested)
 h5py # for saving the estimated parameters
