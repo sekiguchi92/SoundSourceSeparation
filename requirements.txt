@@ -1,0 +1,4 @@
+numpy
+librosa
+pysoundfile
+tqdm
