@@ -150,7 +150,6 @@ class AR_FastMNMF2(Base):
                 g_eps=self.g_eps,
             )
             separater_init.load_spectrogram(self.X_FTM)
-            print(f"Start {separater_init}")
             separater_init.solve(n_iter=self.start_idx, save_wav=False)
 
             self.P_FxMxMLa = separater_init.P_FxMxMLa
@@ -204,7 +203,7 @@ class AR_FastMNMF2(Base):
     def update_G(self):
         numerator = self.xp.einsum("nft, ftm -> nm", self.PSD_NFT, self.Px_power_FTM / (self.Y_FTM ** 2))
         denominator = self.xp.einsum("nft, ftm -> nm", self.PSD_NFT, 1 / self.Y_FTM)
-        self.G_NM *= np.sqrt(numerator / denominator)
+        self.G_NM *= self.xp.sqrt(numerator / denominator)
         self.calculate_Y()
 
     def update_P_IP(self):
@@ -324,7 +323,7 @@ if __name__ == "__main__":
     parser.add_argument("--n_tap_AR", type=int, default=4, help="number of basis of NMF")
     parser.add_argument("--n_delay_AR", type=int, default=3, help="number of basis of NMF")
     parser.add_argument("--SCM", type=str, default="twostep", help="circular, obs, twostep")
-    parser.add_argument("--n_iter_init", type=int, default=40, help="nujmber of iteration used in twostep init")
+    parser.add_argument("--n_iter_init", type=int, default=30, help="nujmber of iteration used in twostep init")
     parser.add_argument("--n_iter", type=int, default=100, help="number of iteration")
     parser.add_argument("--n_mic", type=int, default=8, help="number of microphone")
     parser.add_argument("--n_bit", type=int, default=64, help="number of microphone")
