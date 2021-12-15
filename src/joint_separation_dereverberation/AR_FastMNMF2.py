@@ -30,7 +30,7 @@ class AR_FastMNMF2(Base):
         self,
         n_source,
         n_basis=8,
-        SCM="twostep",
+        init_SCM="twostep",
         algo="IP",
         n_tap_AR=3,
         n_delay_AR=3,
@@ -48,7 +48,7 @@ class AR_FastMNMF2(Base):
                 The number of sources.
             n_basis: int
                 The number of bases for the NMF-based source model.
-            SCM: str ('circular', 'obs', 'twostep')
+            init_SCM: str ('circular', 'obs', 'twostep')
                 How to initialize SCM.
                 'obs' is for the case that one speech is dominant in the mixture.
             algo: str (IP, ISS, ISS_Joint)
@@ -63,7 +63,7 @@ class AR_FastMNMF2(Base):
         super().__init__(xp=xp, n_bit=n_bit)
         self.n_source = n_source
         self.n_basis = n_basis
-        self.SCM = SCM
+        self.init_SCM = init_SCM
         self.n_tap_AR = n_tap_AR
         self.n_delay_AR = n_delay_AR
         self.g_eps = g_eps
@@ -83,7 +83,7 @@ class AR_FastMNMF2(Base):
             raise ValueError("algo must be IP, ISS_Joint, or ISS")
 
     def __str__(self):
-        init = f"twostep_{self.n_iter_init}it" if self.SCM == "twostep" else self.SCM
+        init = f"twostep_{self.n_iter_init}it" if self.init_SCM == "twostep" else self.init_SCM
         filename_suffix = (
             f"M={self.n_mic}-S={self.n_source}-F={self.n_freq}-K={self.n_basis}"
             f"-init={init}-Dar={self.n_delay_AR}-Lar={self.n_tap_AR}"
@@ -105,11 +105,11 @@ class AR_FastMNMF2(Base):
                 :, : -(self.n_delay_AR + i)
             ]
 
-    def init_PSD(self):
+    def init_source_model(self):
         self.W_NFK = self.xp.random.rand(self.n_source, self.n_freq, self.n_basis).astype(self.TYPE_FLOAT)
         self.H_NKT = self.xp.random.rand(self.n_source, self.n_basis, self.n_time).astype(self.TYPE_FLOAT)
 
-    def init_SCM(self):
+    def init_spatial_model(self):
         self.start_idx = 0
         self.Q_FMM = self.xp.tile(self.xp.eye(self.n_mic), [self.n_freq, 1, 1]).astype(self.TYPE_COMPLEX)
         self.P_FxMxMLa = self.xp.zeros(
@@ -120,15 +120,15 @@ class AR_FastMNMF2(Base):
         for m in range(self.n_mic):
             self.G_NM[m % self.n_source, m] = 1
 
-        if "circular" in self.SCM:
+        if "circular" in self.init_SCM:
             pass
-        elif "obs" in self.SCM:
+        elif "obs" in self.init_SCM:
             XX_FMM = self.xp.einsum("fti, ftj -> fij", self.X_FTM, self.X_FTM.conj())
             _, eig_vec_FMM = self.xp.linalg.eigh(XX_FMM)
             eig_vec_FMM = eig_vec_FMM[:, :, ::-1]
             self.Q_FMM = self.xp.asarray(eig_vec_FMM).transpose(0, 2, 1).conj()
             self.P_FxMxMLa[:, :, : self.n_mic] = self.Q_FMM
-        elif "twostep" == self.SCM:
+        elif "twostep" == self.init_SCM:
             if self.n_iter_init >= self.n_iter:
                 print(
                     "\n------------------------------------------------------------------\n"
@@ -139,12 +139,12 @@ class AR_FastMNMF2(Base):
                 self.n_iter_init = self.n_iter // 3
 
             self.start_idx = self.n_iter_init
-            SCM_for_init = "circular"
+            init_SCM_firststep = "circular"
 
             separater_init = AR_FastMNMF2(
                 n_source=self.n_source,
                 n_basis=2,
-                SCM=SCM_for_init,
+                init_SCM=init_SCM_firststep,
                 xp=self.xp,
                 n_bit=self.n_bit,
                 n_tap_AR=self.n_tap_AR,
@@ -158,7 +158,7 @@ class AR_FastMNMF2(Base):
             self.Q_FMM = self.P_FxMxMLa[..., : self.n_mic]
             self.G_NM = separater_init.G_NM
         else:
-            raise ValueError("SCM should be circular, obs, or twostep.")
+            raise ValueError("init_SCM should be circular, obs, or twostep.")
 
         self.G_NM /= self.G_NM.sum(axis=1)[:, None]
         self.normalize()
@@ -324,8 +324,8 @@ if __name__ == "__main__":
     parser.add_argument("--n_basis", type=int, default=4, help="number of basis")
     parser.add_argument("--n_tap_AR", type=int, default=4, help="number of basis of NMF")
     parser.add_argument("--n_delay_AR", type=int, default=3, help="number of basis of NMF")
-    parser.add_argument("--SCM", type=str, default="twostep", help="circular, obs, twostep")
     parser.add_argument("--n_iter_init", type=int, default=30, help="nujmber of iteration used in twostep init")
+    parser.add_argument("--init_SCM", type=str, default="twostep", help="circular, obs, twostep")
     parser.add_argument("--n_iter", type=int, default=100, help="number of iteration")
     parser.add_argument("--n_mic", type=int, default=8, help="number of microphone")
     parser.add_argument("--n_bit", type=int, default=64, help="number of microphone")
@@ -349,7 +349,7 @@ if __name__ == "__main__":
         n_source=args.n_source,
         n_basis=args.n_basis,
         xp=xp,
-        SCM=args.SCM,
+        init_SCM=args.init_SCM,
         n_tap_AR=args.n_tap_AR,
         n_delay_AR=args.n_delay_AR,
         n_bit=args.n_bit,

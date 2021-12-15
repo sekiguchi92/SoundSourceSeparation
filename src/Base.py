@@ -149,8 +149,8 @@ class Base:
         """
         self.n_iter = n_iter
         if init:
-            self.init_PSD()
-            self.init_SCM()
+            self.init_source_model()
+            self.init_spatial_model()
 
         print(f"Update {self.method_name}-{self}  {self.n_iter-self.start_idx} times ...")
 
