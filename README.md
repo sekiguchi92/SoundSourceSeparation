@@ -2,9 +2,9 @@
 Tools for multi-channel sound source separation and dereverberation.
 
 ## News
-* Ver 2.0 is released. The code of FastMNMF1 is refactored and FastMNMF2 and AR-FastMNMF2 are newly added.
+* Ver2.0 is released. The code of FastMNMF1 is refactored and FastMNMF2 and AR-FastMNMF2 are newly added.
 * AR-FastMNMF2 is the extension of FastMNMF2 for joint blind source separation and dereverberation.
-* Other methods which were implemented before in this repository such as ILRMA, MNMF, MNMF-DP, and FastMNMF-DP will be added in the future.
+* Other methods implemented at ver1.0 such as ILRMA, MNMF, MNMF-DP, and FastMNMF-DP will be added in the future.
 
 ## Method list
 ### Source separation
