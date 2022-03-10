@@ -199,7 +199,7 @@ class Base:
         with h5py.File(fname, "w") as f:
             for param in self.save_param_list:
                 data = getattr(self, param)
-                if (type(data) is self.xp) and (self.xp is not np):
+                if type(data) is self.xp.ndarray:
                     data = self.convert_to_NumpyArray(data)
                 f.create_dataset(param, data=data)
             f.flush()

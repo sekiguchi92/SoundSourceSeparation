@@ -152,9 +152,9 @@ class MNMF(Base):
     def separate(self, mic_index=MIC_INDEX):
         Omega_NFTMM = self.PSD_NFT[:, :, :, None, None] * self.SCM_NFMM[:, :, None]
         Omega_sum_inv_FTMM = self.xp.linalg.inv(Omega_NFTMM.sum(axis=0))
-        self.separated_spec = self.convert_to_NumpyArray(
-            ((Omega_NFTMM @ Omega_sum_inv_FTMM[None]) @ self.X_FTM[None, :, :, :, None])[:, :, :, mic_index, 0]
-        )
+        self.separated_spec = self.xp.einsum("nftij, ftjk, ftk -> nfti", Omega_NFTMM, Omega_sum_inv_FTMM, self.X_FTM)[
+            ..., mic_index
+        ]
         return self.separated_spec
 
     def calculate_log_likelihood(self):
@@ -181,8 +181,7 @@ def matrix_sqrth(A_NFMM, xp=np):
 def geometric_mean_Ainv(Ainv_NFMM, B_NFMM, xp=np):
     Asqrt_inv = matrix_sqrth(Ainv_NFMM)
     Asqrt = xp.linalg.inv(Asqrt_inv)
-    ans = Asqrt @ matrix_sqrth(Asqrt_inv @ B_NFMM @ Asqrt_inv) @ Asqrt
-    return ans
+    return Asqrt @ matrix_sqrth(Asqrt_inv @ B_NFMM @ Asqrt_inv) @ Asqrt
 
 
 if __name__ == "__main__":
@@ -231,7 +230,7 @@ if __name__ == "__main__":
     separater.solve(
         n_iter=args.n_iter,
         save_dir="./",
-        save_likelihood=True,
+        save_likelihood=False,
         save_param=False,
         save_wav=True,
         interval_save=5,

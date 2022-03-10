@@ -84,7 +84,7 @@ class FastMNMF2(Base):
     def load_spectrogram(self, X_FTM, sample_rate=16000):
         super().load_spectrogram(X_FTM, sample_rate=sample_rate)
         if self.algo == "IP":
-            self.XX_FTMM = self.xp.einsum("fti, ftj -> ftij", X_FTM, X_FTM.conj())
+            self.XX_FTMM = self.xp.einsum("fti, ftj -> ftij", self.X_FTM, self.X_FTM.conj())
 
     def init_source_model(self):
         self.W_NFK = self.xp.random.rand(self.n_source, self.n_freq, self.n_basis).astype(self.TYPE_FLOAT)
@@ -93,7 +93,7 @@ class FastMNMF2(Base):
     def init_spatial_model(self):
         self.start_idx = 0
         self.Q_FMM = self.xp.tile(self.xp.eye(self.n_mic), [self.n_freq, 1, 1]).astype(self.TYPE_COMPLEX)
-        self.G_NM = self.xp.maximum(self.g_eps, self.xp.zeros([self.n_source, self.n_mic], dtype=self.TYPE_FLOAT))
+        self.G_NM = self.xp.ones([self.n_source, self.n_mic], dtype=self.TYPE_FLOAT) * self.g_eps
         for m in range(self.n_mic):
             self.G_NM[m % self.n_source, m] = 1
 
@@ -127,7 +127,7 @@ class FastMNMF2(Base):
                 n_bit=self.n_bit,
                 g_eps=self.g_eps,
             )
-            separater_init.load_spectrogram(self.X_FTM)
+            separater_init.load_spectrogram(self.X_FTM, self.sample_rate)
             separater_init.solve(n_iter=self.start_idx, save_wav=False)
 
             self.Q_FMM = separater_init.Q_FMM
@@ -260,6 +260,7 @@ if __name__ == "__main__":
         help="circular, obs (only for enhancement), twostep",
     )
     parser.add_argument("--n_iter", type=int, default=100, help="number of iteration")
+    parser.add_argument("--g_eps", type=float, default=5e-2, help="minumum value used for initializing G_NM")
     parser.add_argument("--n_mic", type=int, default=8, help="number of microphone")
     parser.add_argument("--n_bit", type=int, default=64, help="number of microphone")
     parser.add_argument("--algo", type=str, default="IP", help="the method for updating Q")
@@ -285,6 +286,7 @@ if __name__ == "__main__":
         n_bit=args.n_bit,
         algo=args.algo,
         n_iter_init=args.n_iter_init,
+        g_eps=args.g_eps,
     )
 
     wav, sample_rate = sf.read(args.input_fname)
