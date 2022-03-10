@@ -31,12 +31,13 @@ class FastMNMF2(Base):
         init_SCM="twostep",
         algo="IP",
         n_iter_init=10,
-        n_bit=64,
-        xp=np,
         g_eps=5e-2,
         interval_norm=10,
+        n_bit=64,
+        xp=np,
+        seed=0,
     ):
-        """ Initialize FastMNMF2
+        """Initialize FastMNMF2
 
         Parameters:
         -----------
@@ -50,9 +51,10 @@ class FastMNMF2(Base):
             algo: str (IP, ISS)
                 How to update Q.
             n_iter_init: int
-                The number of iteration for the first step in twostep initialization.
+                The number of iteration for the first step in 'twostep' initialization.
+            xp : numpy or cupy
         """
-        super().__init__(xp=xp, n_bit=n_bit)
+        super().__init__(xp=xp, n_bit=n_bit, seed=seed)
         self.n_source = n_source
         self.n_basis = n_basis
         self.init_SCM = init_SCM
@@ -160,7 +162,7 @@ class FastMNMF2(Base):
             self.calculate_Qx()
 
     def update_WH(self):
-        tmp1_NFT = self.xp.einsum("nm, ftm -> nft", self.G_NM, self.Qx_power_FTM / (self.Y_FTM ** 2))
+        tmp1_NFT = self.xp.einsum("nm, ftm -> nft", self.G_NM, self.Qx_power_FTM / (self.Y_FTM**2))
         tmp2_NFT = self.xp.einsum("nm, ftm -> nft", self.G_NM, 1 / self.Y_FTM)
         numerator = self.xp.einsum("nkt, nft -> nfk", self.H_NKT, tmp1_NFT)
         denominator = self.xp.einsum("nkt, nft -> nfk", self.H_NKT, tmp2_NFT)
@@ -168,7 +170,7 @@ class FastMNMF2(Base):
         self.calculate_PSD()
         self.calculate_Y()
 
-        tmp1_NFT = self.xp.einsum("nm, ftm -> nft", self.G_NM, self.Qx_power_FTM / (self.Y_FTM ** 2))
+        tmp1_NFT = self.xp.einsum("nm, ftm -> nft", self.G_NM, self.Qx_power_FTM / (self.Y_FTM**2))
         tmp2_NFT = self.xp.einsum("nm, ftm -> nft", self.G_NM, 1 / self.Y_FTM)
         numerator = self.xp.einsum("nfk, nft -> nkt", self.W_NFK, tmp1_NFT)
         denominator = self.xp.einsum("nfk, nft -> nkt", self.W_NFK, tmp2_NFT)
@@ -177,7 +179,7 @@ class FastMNMF2(Base):
         self.calculate_Y()
 
     def update_G(self):
-        numerator = self.xp.einsum("nft, ftm -> nm", self.PSD_NFT, self.Qx_power_FTM / (self.Y_FTM ** 2))
+        numerator = self.xp.einsum("nft, ftm -> nm", self.PSD_NFT, self.Qx_power_FTM / (self.Y_FTM**2))
         denominator = self.xp.einsum("nft, ftm -> nm", self.PSD_NFT, 1 / self.Y_FTM)
         self.G_NM *= self.xp.sqrt(numerator / denominator)
         self.calculate_Y()
@@ -235,7 +237,7 @@ class FastMNMF2(Base):
         return log_likelihood
 
     def load_param(self, filename):
-        super(FastMNMF2, self).load_param(filename)
+        super().load_param(filename)
 
         self.n_source, self.n_freq, self.n_basis = self.W_NFK.shape
         _, _, self.n_time = self.H_NKT
@@ -253,7 +255,10 @@ if __name__ == "__main__":
     parser.add_argument("--n_basis", type=int, default=16, help="number of basis")
     parser.add_argument("--n_iter_init", type=int, default=30, help="nujmber of iteration used in twostep init")
     parser.add_argument(
-        "--init_SCM", type=str, default="twostep", help="circular, obs (only for enhancement), twostep",
+        "--init_SCM",
+        type=str,
+        default="twostep",
+        help="circular, obs (only for enhancement), twostep",
     )
     parser.add_argument("--n_iter", type=int, default=100, help="number of iteration")
     parser.add_argument("--n_mic", type=int, default=8, help="number of microphone")
@@ -291,6 +296,10 @@ if __name__ == "__main__":
     separater.file_id = args.input_fname.split("/")[-1].split(".")[0]
     separater.load_spectrogram(spec_FTM, sample_rate)
     separater.solve(
-        n_iter=args.n_iter, save_dir="./", save_likelihood=False, save_param=False, save_wav=True, interval_save=5,
+        n_iter=args.n_iter,
+        save_dir="./",
+        save_likelihood=False,
+        save_param=False,
+        save_wav=True,
+        interval_save=5,
     )
-

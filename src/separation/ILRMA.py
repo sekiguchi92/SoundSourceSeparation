@@ -22,10 +22,8 @@ class ILRMA(Base):
     Qx_power_FTM: power spectra of Q_FMM times X_FTM
     """
 
-    def __init__(
-        self, n_basis=8, init_SCM="unit", algo="IP", n_bit=64, xp=np, interval_norm=10,
-    ):
-        """ Initialize ILRMA
+    def __init__(self, n_basis=8, init_SCM="unit", algo="IP", interval_norm=10, n_bit=64, xp=np, seed=0):
+        """Initialize ILRMA
 
         Parameters:
         -----------
@@ -36,8 +34,9 @@ class ILRMA(Base):
                 'obs' is for the case that one speech is dominant in the mixture.
             algo: str (IP, ISS)
                 How to update Q.
+            xp : numpy or cupy
         """
-        super().__init__(xp=xp, n_bit=n_bit)
+        super().__init__(xp=xp, n_bit=n_bit, seed=seed)
         self.n_basis = n_basis
         self.init_SCM = init_SCM
         self.algo = algo
@@ -108,14 +107,14 @@ class ILRMA(Base):
 
     def update_WH(self):
         numerator = self.xp.einsum(
-            "nkt, nft -> nfk", self.H_NKT, self.Qx_power_FTM.transpose(2, 0, 1) / (self.PSD_NFT ** 2)
+            "nkt, nft -> nfk", self.H_NKT, self.Qx_power_FTM.transpose(2, 0, 1) / (self.PSD_NFT**2)
         )
         denominator = self.xp.einsum("nkt, nft -> nfk", self.H_NKT, 1 / self.PSD_NFT)
         self.W_NFK *= self.xp.sqrt(numerator / denominator)
         self.calculate_PSD()
 
         numerator = self.xp.einsum(
-            "nfk, nft -> nkt", self.W_NFK, self.Qx_power_FTM.transpose(2, 0, 1) / (self.PSD_NFT ** 2)
+            "nfk, nft -> nkt", self.W_NFK, self.Qx_power_FTM.transpose(2, 0, 1) / (self.PSD_NFT**2)
         )
         denominator = self.xp.einsum("nfk, nft -> nkt", self.W_NFK, 1 / self.PSD_NFT)
         self.H_NKT *= self.xp.sqrt(numerator / denominator)
@@ -165,7 +164,7 @@ class ILRMA(Base):
         return log_likelihood
 
     def load_param(self, filename):
-        super(ILRMA, self).load_param(filename)
+        super().load_param(filename)
 
         self.n_mic, self.n_freq, self.n_basis = self.W_NFK.shape
         _, _, self.n_time = self.H_NKT
@@ -181,7 +180,10 @@ if __name__ == "__main__":
     parser.add_argument("--n_fft", type=int, default=1024, help="number of frequencies")
     parser.add_argument("--n_basis", type=int, default=4, help="number of basis")
     parser.add_argument(
-        "--init_SCM", type=str, default="unit", help="unit, obs (only for enhancement)",
+        "--init_SCM",
+        type=str,
+        default="unit",
+        help="unit, obs (only for enhancement)",
     )
     parser.add_argument("--n_iter", type=int, default=100, help="number of iteration")
     parser.add_argument("--n_mic", type=int, default=8, help="number of microphone")
@@ -201,7 +203,13 @@ if __name__ == "__main__":
             print("Warning: cupy is not installed. 'gpu' argument should be set to -1. Switched to CPU.\n")
             import numpy as xp
 
-    separater = ILRMA(n_basis=args.n_basis, xp=xp, init_SCM=args.init_SCM, n_bit=args.n_bit, algo=args.algo,)
+    separater = ILRMA(
+        n_basis=args.n_basis,
+        xp=xp,
+        init_SCM=args.init_SCM,
+        n_bit=args.n_bit,
+        algo=args.algo,
+    )
 
     wav, sample_rate = sf.read(args.input_fname)
     wav /= np.abs(wav).max() * 1.2
@@ -211,5 +219,10 @@ if __name__ == "__main__":
     separater.file_id = args.input_fname.split("/")[-1].split(".")[0]
     separater.load_spectrogram(spec_FTM, sample_rate)
     separater.solve(
-        n_iter=args.n_iter, save_dir="./", save_likelihood=False, save_param=False, save_wav=True, interval_save=5,
+        n_iter=args.n_iter,
+        save_dir="./",
+        save_likelihood=False,
+        save_param=False,
+        save_wav=True,
+        interval_save=5,
     )

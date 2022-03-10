@@ -170,8 +170,8 @@ class Base:
             if save_likelihood and ((self.it + 1) % interval_save == 0) and ((self.it + 1) != n_iter):
                 self.log_likelihood_dict[self.it + 1] = float(self.calculate_log_likelihood())
 
+        self.separate(mic_index=mic_index)
         if save_wav or save_wav_all:
-            self.separate(mic_index=mic_index)
             save_fname = f"{save_dir}/{self.method_name}-sep-{str(self)}-{n_iter}.wav"
             self.save_to_wav(self.separated_spec, save_fname=save_fname, shape="FTM")
 
