@@ -120,12 +120,11 @@ class FastMNMF1(Base):
                 self.n_iter_init = self.n_iter // 3
 
             self.start_idx = self.n_iter_init
-            init_SCM_firststep = "circular"
 
             separater_init = FastMNMF1(
                 n_source=self.n_source,
                 n_basis=2,
-                init_SCM=init_SCM_firststep,
+                init_SCM="circular",
                 xp=self.xp,
                 n_bit=self.n_bit,
                 g_eps=self.g_eps,

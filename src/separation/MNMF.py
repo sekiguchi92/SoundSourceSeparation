@@ -74,6 +74,7 @@ class MNMF(Base):
             ilrma = ILRMA(n_basis=2, init_SCM="unit", xp=self.xp)
             ilrma.load_spectrogram(self.X_FTM)
             ilrma.solve(n_iter=self.n_iter_init, save_wav=False)
+            self.start_idx = self.n_iter_init
             MixingMatrix_FMM = self.xp.linalg.inv(ilrma.Q_FMM)
             separated_spec_power = self.xp.abs(ilrma.separated_spec).mean(axis=(1, 2))
             for n in range(self.n_source):
@@ -91,6 +92,7 @@ class MNMF(Base):
             fastmnmf2 = FastMNMF2(n_source=self.n_source, n_basis=2, init_SCM="circular", xp=self.xp)
             fastmnmf2.load_spectrogram(self.X_FTM)
             fastmnmf2.solve(n_iter=self.n_iter_init, save_wav=False)
+            self.start_idx = self.n_iter_init
             Qinv_FMM = self.xp.linalg.inv(fastmnmf2.Q_FMM)
             self.SCM_NFMM = self.xp.einsum("fij, nj, fkj -> nfik", Qinv_FMM, fastmnmf2.G_NM, Qinv_FMM.conj())
         self.normalize()
