@@ -4,12 +4,15 @@ Tools for multi-channel sound source separation and dereverberation.
 ## News
 * Ver2.0 is released. The code of FastMNMF1 is refactored and FastMNMF2 and AR-FastMNMF2 are newly added.
 * AR-FastMNMF2 is the extension of FastMNMF2 for joint blind source separation and dereverberation.
-* Other methods implemented at ver1.0 such as ILRMA, MNMF, MNMF-DP, and FastMNMF-DP will be added in the future.
+* MNMF and ILRMA are also available.
+* Other methods implemented at ver1.0 such as MNMF-DP and FastMNMF-DP will be added in the future.
 
 ## Method list
 ### Source separation
 * FastMNMF1
 * FastMNMF2
+* ILRMA
+* MNMF
 
 ### Joint source separation and dereverberation
 * AR-FastMNMF2
@@ -33,7 +36,7 @@ h5py # for saving the estimated parameters
 
 ## Usage
 ```
-python3 FastMNMF.py [input_filename] --gpu [gpu_id]
+python3 FastMNMF2.py [input_filename] --gpu [gpu_id]
 ```
 * Input is the multichannel observed signals.  
 * If gpu_id < 0, CPU is used, and cupy is not required.
