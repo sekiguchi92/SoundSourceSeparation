@@ -10,18 +10,6 @@ sys.path.append(str(Path(os.path.abspath(__file__)).parents[1]))
 from Base import EPS, MIC_INDEX, Base, MultiSTFT
 
 
-def calc_time(func):
-    import time
-
-    def wrapper(*args, **kwargs):
-        start = time.time()
-        res = func(*args, **kwargs)
-        print(func, " : ", time.time() - start)
-        return res
-
-    return wrapper
-
-
 class MNMF(Base):
     """The blind source separation using MNMF
 
@@ -46,7 +34,6 @@ class MNMF(Base):
                 'obs' is for the case that one speech is dominant in the mixture.
             n_iter_init: int
                 The number of iteration for ILRMA in 'ILRMA' initialization.
-            xp : numpy or cupy
         """
         super(MNMF, self).__init__(device=device, seed=seed, n_bit=64)
         self.save_param_list += ["W_NFK", "H_NKT", "SCM_NFMM"]
@@ -101,7 +88,7 @@ class MNMF(Base):
         elif "fastmnmf" in self.init_SCM.lower():
             from FastMNMF2 import FastMNMF2
 
-            fastmnmf2 = FastMNMF2(n_source=self.n_source, n_basis=2, init_SCM="circular", xp=torch)
+            fastmnmf2 = FastMNMF2(n_source=self.n_source, n_basis=2, init_SCM="circular", device=self.device)
             fastmnmf2.load_spectrogram(self.X_FTM)
             fastmnmf2.solve(n_iter=self.n_iter_init, save_wav=False)
             self.start_idx = self.n_iter_init
@@ -119,7 +106,6 @@ class MNMF(Base):
         self.update_SCM()
         self.normalize()
 
-    @calc_time
     def update_axiliary_variable(self):
         self.Yinv_FTMM = torch.linalg.solve(
             torch.einsum("nft, nfij -> ftij", self.PSD_NFT.to(self.TYPE_COMPLEX), self.SCM_NFMM),
@@ -133,7 +119,6 @@ class MNMF(Base):
         ).real
         self.tr_SCM_Yinv_NFT = torch_trace(torch.einsum("nfij, ftjl -> nftil", self.SCM_NFMM, self.Yinv_FTMM)).real
 
-    @calc_time
     def update_WH(self):
         W_numerator_NFK = torch.einsum("nkt, nft -> nfk", self.H_NKT, self.tr_SCM_Yinv_X_Yinv_NFT)
         W_denominator_NFK = torch.einsum("nkt, nft -> nfk", self.H_NKT, self.tr_SCM_Yinv_NFT)
@@ -144,7 +129,6 @@ class MNMF(Base):
         self.W_NFK *= torch.sqrt(W_numerator_NFK / W_denominator_NFK)
         self.H_NKT *= torch.sqrt(H_numerator_NKT / H_denominator_NKT)
 
-    @calc_time
     def update_SCM(self):
         left_NFMM = torch.einsum("nft, ftij -> nfij", self.PSD_NFT.to(self.TYPE_COMPLEX), self.Yinv_FTMM)
         b = torch.einsum("nft, ftij -> nfij", self.PSD_NFT.to(self.TYPE_COMPLEX), self.Yinv_X_Yinv_FTMM)
@@ -155,7 +139,6 @@ class MNMF(Base):
         self.SCM_NFMM = geometric_mean_Ainv(left_NFMM, right_NFMM)
         self.SCM_NFMM = (self.SCM_NFMM + self.SCM_NFMM.permute(0, 1, 3, 2).conj()) / 2
 
-    @calc_time
     def normalize(self):
         mu_NF = torch_trace(self.SCM_NFMM).real
         self.SCM_NFMM /= mu_NF[:, :, None, None]
@@ -167,7 +150,6 @@ class MNMF(Base):
 
         self.calculate_PSD()
 
-    @calc_time
     def separate(self, mic_index=MIC_INDEX):
         Omega_NFTMM = self.PSD_NFT[:, :, :, None, None] * self.SCM_NFMM[:, :, None]
         Omega_sum_inv_FTMM = torch.linalg.inv(Omega_NFTMM.sum(axis=0))
@@ -176,7 +158,6 @@ class MNMF(Base):
         ]
         return self.separated_spec
 
-    @calc_time
     def calculate_log_likelihood(self):
         if not hasattr(self, "XX_FTMM"):
             self.XX_FTMM = torch.einsum("fti, ftj -> ftij", self.X_FTM, self.X_FTM.conj())
