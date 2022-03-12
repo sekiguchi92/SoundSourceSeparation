@@ -2,9 +2,7 @@
 Tools for multi-channel sound source separation and dereverberation.
 
 ## News
-* Ver2.0 is released. The code of FastMNMF1 is refactored and FastMNMF2 and AR-FastMNMF2 are newly added.
-* AR-FastMNMF2 is the extension of FastMNMF2 for joint blind source separation and dereverberation.
-* MNMF and ILRMA are also available.
+* Ver2.1 is released. Source separation methods are implemented with Pytorch (numpy and cupy are not necessary)
 * Other methods implemented at ver1.0 such as MNMF-DP and FastMNMF-DP will be added in the future.
 
 ## Method list
@@ -12,27 +10,36 @@ Tools for multi-channel sound source separation and dereverberation.
 * FastMNMF1
 * FastMNMF2
 * ILRMA
-* MNMF
+* MNMF (Pytorch version is much slower than cupy version on GPU)
 
 ### Joint source separation and dereverberation
-* AR-FastMNMF2
+* AR-FastMNMF2 (Pytorch version is not ready)
 
 ## Requirements
 * Tested on Python3.8  
-* Minimal requirements are listed below
+* Requirements for numpy and cupy version in `src` are listed below
 ```
 numpy (1.19.2 was tested)
 librosa
 pysoundfile
 tqdm
-```
-You can install all the packages above with `pip install -r requirements.txt`  
-  
-* Optional packages are listed below
-```
+
+# optional packages
 cupy # for GPU accelaration (9.4.0 was tested)
 h5py # for saving the estimated parameters
 ```
+You can install all the packages above with `pip install -r src/requirements.txt`  
+
+* Requirements for pytorch version in `src_torch` are listed below
+```
+torch
+torchaudio
+tqdm
+
+# optional packages
+h5py # for saving the estimated parameters
+```
+You can install all the packages above with `pip install -r src_torch/requirements.txt`  
 
 ## Usage
 ```
@@ -77,5 +84,5 @@ IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP
 n_bit=32 reduces computational cost and memory usage in exchange for the separation performance.
 Especially when the number of microphones (or tap length in AR-based methods like AR-FastMNMF2) is large, the performance is likely to degrade.
 Moreover, when you are using simulated signals without reverberation, since the mixture SCM is likely to be rank-deficient,
-please add small noise to the simulated signals.
+please add small noise to the simulated signals. In MNMF.py, only n_bit=64 is available.
 
