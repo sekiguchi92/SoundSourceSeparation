@@ -30,7 +30,7 @@ class FastMNMF2(Base):
         n_basis=8,
         init_SCM="twostep",
         algo="IP",
-        n_iter_init=10,
+        n_iter_init=30,
         g_eps=5e-2,
         interval_norm=10,
         n_bit=64,
