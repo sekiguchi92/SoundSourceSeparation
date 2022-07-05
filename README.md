@@ -10,7 +10,8 @@ Tools for multi-channel sound source separation and dereverberation.
 * FastMNMF1
 * FastMNMF2
 * FastMNMF2_DP (DNN speech model + NMF noise model)
-* FastBSS2.py (Frequency invariant / NMF / DNN speech model + NMF / Time invariant noise model)
+* FastBSS2 (Frequency invariant / NMF / DNN speech model + NMF / Time invariant noise model)
+  - This method includes FastMNMF2, FastMNMF2_DP, and so on
 * ILRMA
 * MNMF (Pytorch version is much slower than cupy version on GPU)
 
