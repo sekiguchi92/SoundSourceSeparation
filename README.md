@@ -9,6 +9,8 @@ Tools for multi-channel sound source separation and dereverberation.
 ### Source separation
 * FastMNMF1
 * FastMNMF2
+* FastMNMF2_DP (DNN speech model + NMF noise model)
+* FastBSS2.py (Frequency invariant / NMF / DNN speech model + NMF / Time invariant noise model)
 * ILRMA
 * MNMF (Pytorch version is much slower than cupy version on GPU)
 
@@ -27,6 +29,7 @@ tqdm
 # optional packages
 cupy # for GPU accelaration (9.4.0 was tested)
 h5py # for saving the estimated parameters
+torch # for using DNN source model in FastBSS2.py or FastMNMF2_DP.py
 ```
 You can install all the packages above with `pip install -r src/requirements.txt`  
 
