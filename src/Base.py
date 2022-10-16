@@ -172,11 +172,11 @@ class Base:
 
         self.separate(mic_index=mic_index)
         if save_wav or save_wav_all:
-            save_fname = f"{save_dir}/{self.method_name}-sep-{str(self)}-{n_iter}.wav"
+            save_fname = f"{save_dir}/{self.method_name}-sep-{str(self)}.wav"
             self.save_to_wav(self.separated_spec, save_fname=save_fname, shape="FTM")
 
         if save_param or save_param_all:
-            save_fname = f"{save_dir}/{self.method_name}-param-{str(self)}-{n_iter}.h5"
+            save_fname = f"{save_dir}/{self.method_name}-param-{str(self)}.h5"
             self.save_param(save_fname)
 
         if save_likelihood:
