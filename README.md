@@ -2,8 +2,9 @@
 Tools for multi-channel sound source separation and dereverberation.
 
 ## News
-* Ver2.1 is released. Source separation methods are implemented with Pytorch (numpy and cupy are not necessary)
-* Other methods implemented at ver1.0 such as MNMF-DP and FastMNMF-DP will be added in the future.
+* I published new paper entitled ["Autoregressive Moving Average Jointly-Diagonalizable Spatial Covariance Analysis for Joint Source Separation and Dereverberation, IEEE/ACM TASLP2022"](https://ieeexplore.ieee.org/abstract/document/9829286).
+* FastBSSD.py performs joint source separation and dereverberation. You can select speech model from NMF, DNN, and FreqInv models, noise model from NMF and TimeInv models, and reverberation model from AR, MA, ARMA, and None. Please check my paper for details.
+* I also published another paper entitled ["Direction-aware adaptive online neural speech enhancement with an augmented reality headset in real noisy conversational environments, IROS2022](https://arxiv.org/abs/2207.07296).
 
 ## Method list
 ### Source separation
